@@ -1,0 +1,172 @@
+rm(list = ls())
+##Active TFs selection
+##1. Package loading
+##--------------------------------------------------------------------------------------------
+library(pheatmap)
+##-------------------------------
+
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+#3. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Downstream analysis/Obj_use/GRN_patient-type specific.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##4. Data description
+##--------------------------------------------------------------------------------------------
+patient_type<-c("MILD","SEV")
+celltype_vec<-paste("Group",1:4,sep = "")
+p_TF<-56
+p_GRN<-1000
+##--------------------------------------------------------------------------------------------
+
+##5. Calculate the activity of TFs in each patient-type and cell-type specific GRN
+##--------------------------------------------------------------------------------------------
+##Define degree of each TF as its activity
+degree_list<-list()
+for(celltype_use in celltype_vec){
+  mat_all<-matrix(NA,ncol = 0,nrow = p_TF)
+  for(patient_type_use in patient_type){
+    mat<-GRN_patienttype_specific[[celltype_use]][[patient_type_use]]$strength
+    ##
+    degree_TF<-colSums(mat,na.rm = TRUE)[1:p_TF]
+    ##
+    mat_all<-cbind(mat_all,degree_TF)
+    ##
+  }
+  colnames(mat_all)<-patient_type
+  rownames(mat_all)<-rownames(mat)[1:p_TF]
+  degree_list[[celltype_use]]<-mat_all
+}
+##--------------------------------------------------------------------------------------------
+
+##6. Visualization 
+##--------------------------------------------------------------------------------------------
+## 6.1 reorder
+Block_vec<-c()
+celltype_vec_use<-c()
+degree_order<-matrix(NA,nrow = 0,ncol = length(patient_type))
+for(celltype_use in celltype_vec){
+  mat_1<-ifelse(degree_list[[celltype_use]]>0,1,0)
+  TF_use_vec<-names(which((rowSums(mat_1)>0)))
+  max_index_mat<-matrix(0,nrow = length(TF_use_vec),ncol = length(patient_type))
+  rownames(max_index_mat)<-TF_use_vec
+  for(TF_use in TF_use_vec){
+    max_index_mat[TF_use,which.max(degree_list[[celltype_use]][TF_use,])]<-1
+  }
+  ratio_vec<-c()
+  for(TF_use in TF_use_vec){
+    ratio_use<-degree_list[[celltype_use]][TF_use,which(max_index_mat[TF_use,] == 1)]
+    ratio_vec<-c(ratio_vec,ratio_use)
+  }
+  degree_filter<-degree_list[[celltype_use]][TF_use_vec,]
+  
+  for(j in rev(1:length(patient_type))){
+    TF_choose_vec<-which(max_index_mat[,j] == 1)
+    order_vec<-order(ratio_vec[as.vector(TF_choose_vec)],decreasing = TRUE)
+    aaa<-data.frame(MILD = degree_filter[names(TF_choose_vec[order_vec]),1],
+                    SEV = degree_filter[names(TF_choose_vec[order_vec]),2])
+    rownames(aaa)<-names(TF_choose_vec[order_vec])
+    rownames(aaa)<-paste(celltype_use,"_",rownames(aaa),sep = "")
+    Block_vec<-c(Block_vec,rep(j,nrow(aaa)))
+    celltype_vec_use<-c(celltype_vec_use,rep(celltype_use,nrow(aaa)))
+  
+    degree_order<-rbind(degree_order,log2(aaa+1))
+  }
+}
+
+##6.2 Visualization by heatmap
+
+##6.2.1 Preparsion
+annotation_row <- data.frame(
+  Block = factor(ifelse(Block_vec == 1,"Suppressed","Enhanced"),levels = c("Enhanced","Suppressed")),
+  Celltype = celltype_vec_use
+)
+rownames(annotation_row) <- rownames(degree_order)
+save(annotation_row,file = paste(File_path,"/Downstream analysis/Obj_use/annotation_row.Rdata",sep = ""))
+##
+annotation_col <- data.frame(
+  patient_type = patient_type
+)
+rownames(annotation_col) <- patient_type
+
+##6.2.2 Overall heatmap for TFs' activity
+show_celltype<-c("Group1") ## Candiate "Group1", Group2", Group3", Group4" and "ALL"
+if(show_celltype == "ALL"){
+  pheatmap(degree_order,show_colnames = FALSE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+           annotation_col = annotation_col,annotation_row = annotation_row) 
+}else{
+  degree_order_group<-degree_order[which(annotation_row$Celltype == show_celltype),]
+  annotation_row_group<-annotation_row[which(annotation_row$Celltype == show_celltype),]
+  rownames(annotation_row_group)<-as.vector(Reduce("rbind",strsplit(rownames(annotation_row_group),"_"))[,2])
+  rownames(degree_order_group)<-rownames(annotation_row_group)
+  pheatmap(degree_order_group,show_colnames = FALSE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+           annotation_col = annotation_col,annotation_row = annotation_row_group)
+}
+
+##6.2.3 heatmap for most active TFs within each patient type
+##
+show_top<-10
+##
+degree_order_all<-matrix(NA,nrow = show_top * 2, ncol = 0)
+annotation_row_all<-matrix(NA,nrow = show_top * 2, ncol = 0)
+Gene_col<-matrix(NA,nrow = show_top * 2,ncol = 0)
+for(celltype_use in c("Group1","Group2","Group3","Group4")){
+  degree_order_group<-degree_order[which(annotation_row$Celltype == celltype_use),]
+  annotation_row_group<-annotation_row[which(annotation_row$Celltype == celltype_use),]
+  Gene_vec<-as.vector(Reduce("rbind",strsplit(rownames(annotation_row_group),"_"))[,2])
+  rownames(degree_order_group)<-NULL
+  colnames(degree_order_group)<-NULL
+  rownames(annotation_row_group)<-NULL
+  colnames(annotation_row_group)<-NULL
+  ##
+  degree_order_group<-degree_order_group[,c(2,1)]
+  annotation_row_group<-annotation_row_group[,c(2,1)]
+  ##
+  row_top<-c(which(annotation_row_group[,2] == "Enhanced")[1:show_top],which(annotation_row_group[,2] == "Suppressed")[1:show_top])
+  ###
+  Gene_col<-cbind(Gene_col,Gene_vec[c(which(annotation_row_group[,2] == "Enhanced")[1:show_top],rev(which(annotation_row_group[,2] == "Suppressed")[1:show_top]))])
+  ##
+  degree_order_all<-cbind(degree_order_all,degree_order_group[row_top,])
+  annotation_row_all<-cbind(annotation_row_all,annotation_row_group[row_top,])
+}
+colnames(Gene_col)<-paste("Group",1:4,sep = "")
+annotation_row_merge <- data.frame(
+  Block = annotation_row_all[,2]
+)
+rownames(annotation_row_merge) <- 1:nrow(annotation_row_merge)
+##
+annotation_col_merge <- data.frame(
+  patient_type = rep(c("SEV","MILD"),4),
+  celltype = rep(c(c("Group1","Group2","Group3","Group4")),each = 2)
+)
+rownames(annotation_col_merge) <- paste(annotation_col_merge$patient_type,"_",annotation_col_merge$celltype,sep = "")
+
+colnames(degree_order_all)<-rownames(annotation_col_merge)
+rownames(degree_order_all)<-rownames(annotation_row_merge)
+degree_order_all<-degree_order_all - 1
+##
+coul <- colorRampPalette(brewer.pal(9, "OrRd"))(50)
+for(j in 1:4){
+  min_val<-min(as.vector(degree_order_all[,((j-1)*2 + 1) : (j*2)]))
+  max_val<-max(as.vector(degree_order_all[,((j-1)*2 + 1) : (j*2)]))
+  degree_order_all[,((j-1)*2 + 1) : (j*2)]<-((degree_order_all[,((j-1)*2 + 1) : (j*2)]) - min_val)/(max_val - min_val)
+}
+degree_order_all[c((show_top + 1):(2*show_top)),]<-degree_order_all[rev(c((show_top + 1):(2*show_top))),]
+ann_colors= list(celltype = c(Group1 = brewer.pal(12,"Paired")[c(4)],
+                              Group2 = brewer.pal(9,"Set1")[c(4)],
+                              Group3 = brewer.pal(9,"Set1")[c(7)],
+                              Group4 = brewer.pal(9,"Set1")[c(2)]),
+                 patient_type = c(MILD = brewer.pal(9,"Greys")[3],
+                                  SEV = brewer.pal(9,"Greys")[6]))
+pheatmap(degree_order_all,show_colnames = FALSE,show_rownames = FALSE,cluster_cols = FALSE,cluster_rows = FALSE,
+         annotation_col = annotation_col_merge,annotation_row = NULL,
+         cexCol = 1,
+         col = coul,
+         annotation_colors = ann_colors)
+Gene_col
+##--------------------------------------------------------------------------------------------

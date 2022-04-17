@@ -1,0 +1,181 @@
+rm(list = ls())
+##1. Package loading
+##--------------------------------------------------------------------------------------------
+library(Rcpp)
+library(Seurat)
+library(glasso)
+library(mclust)
+library(scGeneNet)
+##-------------------------------
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+
+#3. Set up the file path of data
+##--------------------------------------------------------------------------------------------
+expression_path<-paste(File_path,"/Data/expression_specific patient/patient_",sep = "")
+meta_path<-paste(File_path,"/Data/meta_specific patient/patient_",sep = "")
+gene_GRN_path<-paste(File_path,"/Data/gene_GRN_1000.Rdata",sep = "")
+##--------------------------------------------------------------------------------------------
+
+##4. Set up the path for saving
+##--------------------------------------------------------------------------------------------
+initial_save_path<-paste(File_path,"/Train model/Output_obj/scGeneNet_list_initial_",sep = "")
+initial_optional_save_path<-paste(File_path,"/Train model/Output_obj/scGeneNet_list_initial_optional_",sep = "")
+lambda_vec_path<-paste(File_path,"/Train model/Output_obj/lambda_vec_",sep = "")
+result_save_path<-paste(File_path,"/Train model/Output_obj/scGeneNet_result_",sep = "")
+##--------------------------------------------------------------------------------------------
+
+##5. Choose the patient for training
+##--------------------------------------------------------------------------------------------
+patient_vec<-c(paste("O",1:3,sep = ""),"S1",paste("C",1:5,sep = ""))
+print(patient_vec)
+##
+patient_index<-1 ## As example, choose the first patient for training
+##
+##--------------------------------------------------------------------------------------------
+
+##6. Set the parameter
+##--------------------------------------------------------------------------------------------
+##Whether penalize diagonal
+penalize_diagonal_use<-TRUE
+##number of core
+num_core<-20
+##--------------------------------------------------------------------------------------------
+
+
+##7. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(expression_path,patient_vec[patient_index],".Rdata",sep = ""))
+load(paste(meta_path,patient_vec[patient_index],".Rdata",sep = ""))
+cluster_true<-as.numeric(factor(meta_Macro$Macrophages_group,levels = c("Group1","Group2","Group3","Group4"))) - 1
+p_TF<-56
+celltypes_num<-length(unique(cluster_true))
+load(gene_GRN_path)
+load(paste(File_path,"/Data/gold_standard_network_1000.Rdata",sep = ""))
+zero_mat<-exact_zeroindex(support = gold_standard_network)
+##--------------------------------------------------------------------------------------------
+
+
+##8. Initialization
+##--------------------------------------------------------------------------------------------
+##8.1 Basic initialization
+scGeneNet_list<-scGeneNet_init(expression_profile = expression_profile_Macro,
+                       celltypes_num = celltypes_num,
+                       celltypes_ref = cluster_true,
+                       ls_est = "TSS",
+                       gene_GRN = gene_GRN,
+                       HVG_model_num = 2000,
+                       zero_GRN = zero_mat,
+                       preprocess_Control = list(HVG_num = 2000,npc = 50,run_umap = TRUE,label_umap = cluster_true, cluster_method = "SNN"),
+                       core_num = num_core)
+save(scGeneNet_list,file = paste(initial_save_path,patient_vec[patient_index],".Rdata",sep = ""))
+
+##8.2 (Optional) An advance initialization by optimizating M and S
+scGeneNet_list<-scGeneNet_main(scGeneNet_list = scGeneNet_list,lambda_use = 1e-6,
+                       Theta_Control = list(penalize_diagonal = FALSE),
+                       U_fix = TRUE,
+                       verbose = TRUE,
+                       core_num = num_core)
+
+save(scGeneNet_list,file = paste(initial_optional_save_path,patient_vec[patient_index],".Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+
+
+##9. Set the path of hyper-parameter lambda
+##--------------------------------------------------------------------------------------------
+print("lambda max start.")
+lambda_max_res <- exact_lambdamax(scGeneNet_list = scGeneNet_list,
+                                  Global_Control = list(minit = 2, maxit = 5,maxit_nonGRN = 2),
+                                  Theta_Control = list(penalize_diagonal = penalize_diagonal_use),
+                                  verbose = TRUE,
+                                  core_num = num_core)
+lambda_max_uni<-sort(unique(lambda_max_res))
+lambda_min_res<-1e-6
+lambda_length<-25
+if(length(lambda_max_uni) == 1){
+  lambda_vec<-c(seq(from=(lambda_min_res),to=(lambda_max_uni[1]/2),length.out = lambda_length * 0.6),
+                seq(from=(lambda_max_uni[1]/2),to=(lambda_max_uni[1]),length.out = lambda_length * 0.4))
+}else{
+  lambda_max_uni<-c(lambda_min_res,lambda_max_uni)
+  lambda_vec<-c()
+  for(k in 1:(length(lambda_max_uni) - 1)){
+    lambda_vec<-c(lambda_vec,seq(from=(lambda_max_uni[k]),to=((lambda_max_uni[k+1] + lambda_max_uni[k])/2),length.out = lambda_length * 0.6),
+                  seq(from=((lambda_max_uni[k+1] + lambda_max_uni[k])/2), to=(lambda_max_uni[k+1]),length.out = lambda_length * 0.4))
+  }
+}
+save(lambda_vec,file = paste(lambda_vec_path,patient_vec[patient_index],".Rdata",sep = ""))
+lambda_vec<-unique(lambda_vec)
+##--------------------------------------------------------------------------------------------
+
+
+##10. Run the scGeneNet for each specific lambda
+##--------------------------------------------------------------------------------------------
+p_GRN<-length(scGeneNet_list$gene_GRN)
+##
+BIC_mat_shrink = matrix(NA,nrow = celltypes_num,ncol = length(lambda_vec))
+BIC_mat_shrink1 = matrix(NA,nrow = celltypes_num,ncol = length(lambda_vec))
+cluster_acc = rep(NA,length(lambda_vec))
+U_mat_array<-array(NA,dim = c(length(lambda_vec),nrow(scGeneNet_list$obs_mat),celltypes_num))
+Theta_mat_array_hat_all<-array(NA,dim = c(p_GRN,p_GRN,celltypes_num,length(lambda_vec)))
+##
+for (l in 1:length(lambda_vec)) {
+  print(paste("lambda(",l,") = ",lambda_vec[l],sep = ""))
+  scGeneNet_list_cur<-scGeneNet_main(scGeneNet_list = scGeneNet_list,lambda_use = lambda_vec[l],
+                             Global_Control = list(ELBO_threshold = 1e-4),
+                             Theta_Control = list(penalize_diagonal = penalize_diagonal_use),
+                             verbose = TRUE,
+                             U_fix = FALSE,
+                             core_num = 20)
+  ## Some quantities of interest
+  ## BIC
+
+  BIC_mat_shrink[,l]<-scGeneNet_list_cur$scGeneNet_bic_VMICL
+  BIC_mat_shrink1[,l]<-scGeneNet_list_cur$scGeneNet_bic_VICL
+
+  
+  ## Theta_mat
+
+  for(g in 1:celltypes_num){
+    if(penalize_diagonal_use == FALSE){
+      Theta_mat_array_hat_all[,,g,l]<-as.matrix(scGeneNet_list_cur$Theta_mat_list[[g]])[1:p_GRN,1:p_GRN]
+    }else{
+      Theta_mat_array_hat_all[,,g,l]<-as.matrix(scGeneNet_list_cur$Theta_mat_list_pd[[g]])[1:p_GRN,1:p_GRN]
+    }
+  }
+  
+  # U_mat
+
+  U_mat_array[l,,]<-scGeneNet_list_cur$U_mat
+
+  
+  ##ARI (Optional, if "cluster_true" is given.)
+ 
+  if(!is.null(cluster_true)){
+    cluster_acc0<-adjustedRandIndex(scGeneNet_list_cur$celltypes_label,cluster_true)
+    cluster_acc[l]<-cluster_acc0
+    print(paste("ARI: ",round(cluster_acc0,3),sep = ""))
+  }
+  
+  
+}
+
+##
+result_all_list = list(BIC_mat_shrink = BIC_mat_shrink,
+                       BIC_mat_shrink1 = BIC_mat_shrink1,
+                       cluster_acc = cluster_acc,
+                       U_mat_array = U_mat_array,
+                       Theta_mat_array_hat_all = Theta_mat_array_hat_all)
+##
+##--------------------------------------------------------------------------------------------
+
+##11. Save the result
+##--------------------------------------------------------------------------------------------
+save(result_all_list,file = paste(result_save_path,patient_vec[patient_index],".Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+

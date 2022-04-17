@@ -1,0 +1,263 @@
+rm(list = ls())
+##Expression visualization for potential target
+##1. Package loading
+##--------------------------------------------------------------------------------------------
+library(ggplot2)
+library(RColorBrewer)
+library(Matrix)
+library(pheatmap)
+##--------------------------------------------------------------------------------------------
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+##3. Load data
+##--------------------------------------------------------------------------------------------
+TF_use<-"NR4A1"
+load(paste(File_path,"/Downstream analysis/Obj_use/exp_analysis_obj_Group4_NR4A1.Rdata",sep = ""))
+meta_data<-read.csv(file = paste(File_path,"/Data/data_infected_macrophage/GSE155249_supplement-metadata.csv/GSE155249_supplement-metadata.csv",sep = ""))
+exp_data<-load(paste(File_path,"/Data/data_infected_macrophage/data_list.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##4. Data description
+##--------------------------------------------------------------------------------------------
+Macro_subtype<-c("MoAM1","MoAM2","MoAM3","MoAM4",
+                 "TRAM1","TRAM2")
+patient_COVID19_noninfected<-c("6","C")
+patient_COVID19_infected<-setdiff(names(table(meta_data$Patient)),patient_COVID19_noninfected)
+##--------------------------------------------------------------------------------------------
+
+##5. Collect expression data and meta data
+##--------------------------------------------------------------------------------------------
+exp_list<-list()
+for(patient_type in c("COVID19_POS","COVID19_NEG")){
+  if(patient_type == "COVID19_POS"){
+    patient_choose<-patient_COVID19_infected
+  }else{
+    patient_choose<-patient_COVID19_noninfected
+  }
+  for(celltype_use in Macro_subtype){
+    exp_mat<-data_list$exp_data_GRN[which((meta_data$Patient %in% patient_choose) & (meta_data$Cluster == celltype_use)),] 
+    meta_mat<-data_list$meta_data[which((meta_data$Patient %in% patient_choose) & (meta_data$Cluster == celltype_use)),] 
+    exp_list[[patient_type]][[celltype_use]][["EXP"]]<-exp(exp_mat)
+    exp_list[[patient_type]][[celltype_use]][["Meta"]]<-meta_mat
+  }
+}
+##--------------------------------------------------------------------------------------------
+
+###
+
+##6. Comparsion analysis
+##6.1 TRAM2 (more infected) vs TRAM1 in COVID-19 positive patient
+##--------------------------------------------------------------------------------------------
+exp_COVID19_POS_choose<-exp_list$COVID19_POS$TRAM2$EXP
+exp_COVID19_NEG_choose<-exp_list$COVID19_POS$TRAM1$EXP
+
+exp_COVID19_POS_choose<-exp_COVID19_POS_choose[,which(colnames(exp_COVID19_POS_choose) %in% c(TF_use,exp_analysis_obj$target_choose_SEV_only))]
+exp_COVID19_NEG_choose<-exp_COVID19_NEG_choose[,which(colnames(exp_COVID19_NEG_choose) %in% c(TF_use,exp_analysis_obj$target_choose_SEV_only))]
+
+##Differential expression analysis
+##log fold change & wilcox rank sum test
+log_fc_vec<-c()
+p_value_vec<-c()
+for(gene_use in exp_analysis_obj$target_choose_SEV_only){
+  exp_SEV_vec<-as.vector(exp_COVID19_POS_choose[,which(colnames(exp_COVID19_POS_choose) == gene_use)])
+  exp_MILD_vec<-as.vector(exp_COVID19_NEG_choose[,which(colnames(exp_COVID19_NEG_choose) == gene_use)])
+  log_fc_vec<-c(log_fc_vec,mean(exp_SEV_vec) - mean(exp_MILD_vec))
+  ##
+  wilcox_res<-wilcox.test(x = exp_SEV_vec, y = exp_MILD_vec, 
+                          alternative = ifelse(exp_analysis_obj$sign_choose_vec[which(exp_analysis_obj$target_choose_SEV_only == gene_use)] == "positive","greater","less"))
+  p_value_vec<-c(p_value_vec,wilcox_res$p.value)
+}
+DE_mat<-data.frame(gene = exp_analysis_obj$target_choose_SEV_only,
+                   sign = exp_analysis_obj$sign_choose_vec,
+                   log_fc = log_fc_vec,
+                   pvalue = p_value_vec)
+rownames(DE_mat)<-DE_mat$gene
+DE_mat$if_choose<-ifelse((DE_mat$sign == "positive" & DE_mat$log_fc>0) | (DE_mat$sign == "negative" & DE_mat$log_fc<0),1,0)
+# DE_mat
+
+#
+plotdata<-data.frame(exp = c(as.vector(t(exp_COVID19_POS_choose)),as.vector(t(exp_COVID19_NEG_choose))),
+                     gene = c(rep(colnames(exp_COVID19_POS_choose),dim(exp_COVID19_POS_choose)[1]),rep(colnames(exp_COVID19_NEG_choose),dim(exp_COVID19_NEG_choose)[1])),
+                     patient = c(rep("Infected",length(as.vector(exp_COVID19_POS_choose))),rep("Uninfected",length(as.vector(exp_COVID19_NEG_choose)))))
+plotdata$patient<-factor(plotdata$patient,levels = c("Infected","Uninfected"))
+
+##
+gene_reorder<-c()
+DE_mat_pos<-DE_mat[DE_mat$gene[which(DE_mat$sign == "positive")],]
+order_pos<-order(DE_mat_pos$pvalue,decreasing = FALSE)
+gene_reorder<-c(gene_reorder,DE_mat_pos$gene[order_pos])
+
+DE_mat_neg<-DE_mat[DE_mat$gene[which(DE_mat$sign == "negative")],]
+order_neg<-order(DE_mat_neg$pvalue,decreasing = FALSE)
+gene_reorder<-c(gene_reorder,DE_mat_neg$gene[order_neg])
+
+DE_mat_reorder<-DE_mat[gene_reorder,]
+DE_mat_reorder
+
+plotdata$gene<-factor(plotdata$gene,levels = c(TF_use,gene_reorder))
+plotdata$sign<-ifelse(plotdata$gene %in% DE_mat_reorder$gene[which(DE_mat_reorder$sign == "positive")],"positive","negative")
+plotdata$sign<-factor(plotdata$sign,levels = c("positive","negative"))
+
+plotdata$if_target<-ifelse(plotdata$gene %in% TF_use,FALSE,TRUE)
+
+
+ggplot(data = plotdata, aes(x = patient, y = exp))+geom_violin(aes(fill = patient)) + facet_grid(gene~.,scales = "free_y") + 
+  theme_bw()+
+  xlab("")+
+  ylab("Expression")+
+  theme(panel.grid.major=element_blank(),panel.grid.minor=element_blank(),
+        axis.text.x = element_blank())+
+  scale_fill_manual(breaks = c("Infected","Uninfected"), values = c(brewer.pal(9,"Set1")[1:2]))+
+  labs(fill = "Patient")
+DE_mat_reorder
+
+##heatmap
+# gene_all<-c(TF_use,DE_mat_reorder$gene)
+load(file = "F:/Users/TJJ/OneDrive/Desktop/gene_Target_reorder.Rdata")
+gene_all<-c(TF_use,gene_Target_reorder)
+heat_mat<-matrix(NA,nrow = 3,ncol = length(gene_all))
+colnames(heat_mat)<-gene_all
+rownames(heat_mat)<-c("TRAM2","TRAM1","p value")
+
+for(gene_use in gene_all){
+  
+  heat_mat["TRAM2",gene_use]<-mean(plotdata$exp[which(plotdata$gene == gene_use & plotdata$patient == "Infected")])
+  heat_mat["TRAM1",gene_use]<-mean(plotdata$exp[which(plotdata$gene == gene_use & plotdata$patient == "Uninfected")])
+  
+  if(gene_use == TF_use){
+    heat_mat["p value",gene_use]<-1
+  }else{
+    heat_mat["p value",gene_use]<-DE_mat_reorder[which(DE_mat_reorder$gene == gene_use),"pvalue"]
+  }
+}
+heat_mat<-rbind(heat_mat,-((-log(heat_mat[3,]))^(1/3)))
+rownames(heat_mat)[4]<-c("Strength")
+
+
+threshold<-10
+heat_mat<-heat_mat[,-1]
+heat_mat[c(1,2),]<-ifelse(heat_mat[c(1,2),]>=threshold,threshold,heat_mat[c(1,2),])
+heat_mat[c(1,2),]<-log2(heat_mat[c(1,2),] + 1)
+##
+annotation_row <- NULL
+annotation_col <- data.frame(
+  Regulatory_type = c(DE_mat_reorder$sign)
+)
+rownames(annotation_col) <- colnames(heat_mat)
+##
+pheatmap(heat_mat[-3,],show_colnames = TRUE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+         annotation_col = annotation_col,annotation_row = annotation_row,
+         col = c(rev(colorRampPalette(c("white","#334FDC"))(25))[-25],
+                 colorRampPalette(c("white","#DB3F3B"))(25)),
+         breaks = c(rev(seq(from = 0, to = min(as.vector(heat_mat[4,])),length.out = 25))[-25],seq(from = 0, to = log2(threshold+1),length.out = 25)),
+         border_color = "white"
+)
+##--------------------------------------------------------------------------------------------
+
+##6.2 MoAM2 (more infected) vs other type MoAM (MoAM1,MoAM2,MoAM4) in COVID-19 positive patient
+##--------------------------------------------------------------------------------------------
+exp_COVID19_POS_choose<-exp_list$COVID19_POS$MoAM2$EXP
+exp_COVID19_NEG_choose<-rbind(exp_list$COVID19_POS$MoAM1$EXP,
+                              exp_list$COVID19_POS$MoAM3$EXP,
+                              exp_list$COVID19_POS$MoAM4$EXP)
+
+exp_COVID19_POS_choose<-exp_COVID19_POS_choose[,which(colnames(exp_COVID19_POS_choose) %in% c(TF_use,exp_analysis_obj$target_choose_SEV_only))]
+exp_COVID19_NEG_choose<-exp_COVID19_NEG_choose[,which(colnames(exp_COVID19_NEG_choose) %in% c(TF_use,exp_analysis_obj$target_choose_SEV_only))]
+
+##Differential expression analysis
+##log fold change & wilcox rank sum test
+log_fc_vec<-c()
+p_value_vec<-c()
+for(gene_use in exp_analysis_obj$target_choose_SEV_only){
+  exp_SEV_vec<-as.vector(exp_COVID19_POS_choose[,which(colnames(exp_COVID19_POS_choose) == gene_use)])
+  exp_MILD_vec<-as.vector(exp_COVID19_NEG_choose[,which(colnames(exp_COVID19_NEG_choose) == gene_use)])
+  ##
+  log_fc_vec<-c(log_fc_vec,mean(exp_SEV_vec) - mean(exp_MILD_vec))
+  ##
+  wilcox_res<-wilcox.test(x = exp_SEV_vec, y = exp_MILD_vec, 
+                          alternative = ifelse(exp_analysis_obj$sign_choose_vec[which(exp_analysis_obj$target_choose_SEV_only == gene_use)] == "positive","greater","less"))
+  p_value_vec<-c(p_value_vec,wilcox_res$p.value)
+}
+DE_mat<-data.frame(gene = exp_analysis_obj$target_choose_SEV_only,
+                   sign = exp_analysis_obj$sign_choose_vec,
+                   log_fc = log_fc_vec,
+                   pvalue = p_value_vec)
+rownames(DE_mat)<-DE_mat$gene
+DE_mat$if_choose<-ifelse((DE_mat$sign == "positive" & DE_mat$log_fc>0) | (DE_mat$sign == "negative" & DE_mat$log_fc<0),1,0)
+# DE_mat
+
+#
+plotdata<-data.frame(exp = c(as.vector(t(exp_COVID19_POS_choose)),as.vector(t(exp_COVID19_NEG_choose))),
+                     gene = c(rep(colnames(exp_COVID19_POS_choose),dim(exp_COVID19_POS_choose)[1]),rep(colnames(exp_COVID19_NEG_choose),dim(exp_COVID19_NEG_choose)[1])),
+                     patient = c(rep("Infected",length(as.vector(exp_COVID19_POS_choose))),rep("Uninfected",length(as.vector(exp_COVID19_NEG_choose)))))
+plotdata$patient<-factor(plotdata$patient,levels = c("Infected","Uninfected"))
+
+##
+gene_reorder<-c()
+DE_mat_pos<-DE_mat[DE_mat$gene[which(DE_mat$sign == "positive")],]
+order_pos<-order(DE_mat_pos$pvalue,decreasing = FALSE)
+gene_reorder<-c(gene_reorder,DE_mat_pos$gene[order_pos])
+
+DE_mat_neg<-DE_mat[DE_mat$gene[which(DE_mat$sign == "negative")],]
+order_neg<-order(DE_mat_neg$pvalue,decreasing = FALSE)
+gene_reorder<-c(gene_reorder,DE_mat_neg$gene[order_neg])
+
+DE_mat_reorder<-DE_mat[gene_reorder,]
+DE_mat_reorder
+
+plotdata$gene<-factor(plotdata$gene,levels = c(TF_use,gene_reorder))
+plotdata$sign<-ifelse(plotdata$gene %in% DE_mat_reorder$gene[which(DE_mat_reorder$sign == "positive")],"positive","negative")
+plotdata$sign<-factor(plotdata$sign,levels = c("positive","negative"))
+
+plotdata$if_target<-ifelse(plotdata$gene %in% TF_use,FALSE,TRUE)
+
+##heatmap
+# gene_all<-c(TF_use,DE_mat_reorder$gene)
+load(file = "F:/Users/TJJ/OneDrive/Desktop/gene_Target_reorder.Rdata")
+gene_all<-c(TF_use,gene_Target_reorder)
+heat_mat<-matrix(NA,nrow = 3,ncol = length(gene_all))
+colnames(heat_mat)<-gene_all
+rownames(heat_mat)<-c("MoAM2","other MoAM","p value")
+
+for(gene_use in gene_all){
+  
+  heat_mat["MoAM2",gene_use]<-mean(plotdata$exp[which(plotdata$gene == gene_use & plotdata$patient == "Infected")])
+  heat_mat["other MoAM",gene_use]<-mean(plotdata$exp[which(plotdata$gene == gene_use & plotdata$patient == "Uninfected")])
+  
+  if(gene_use == TF_use){
+    heat_mat["p value",gene_use]<-1
+  }else{
+    heat_mat["p value",gene_use]<-DE_mat_reorder[which(DE_mat_reorder$gene == gene_use),"pvalue"]
+  }
+}
+heat_mat[3,which(heat_mat[3,] == 0)]<-min(heat_mat[3,which(heat_mat[3,] != 0)])
+heat_mat<-rbind(heat_mat,-((-log(heat_mat[3,]))^(1/3)))
+rownames(heat_mat)[4]<-c("Strength")
+
+heat_mat<-heat_mat[,-1]
+threshold<-10
+heat_mat[c(1,2),]<-ifelse(heat_mat[c(1,2),]>=threshold,threshold,heat_mat[c(1,2),])
+
+heat_mat[c(1,2),]<-log2(heat_mat[c(1,2),] + 1)
+##
+annotation_row <- NULL
+annotation_col <- data.frame(
+  Regulatory_type = c(DE_mat_reorder$sign)
+)
+rownames(annotation_col) <- colnames(heat_mat)
+##
+pheatmap(heat_mat[-3,],show_colnames = TRUE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+         annotation_col = annotation_col,annotation_row = annotation_row,
+         ##
+         col = c(rev(colorRampPalette(c("white","#334FDC"))(25))[-25],
+                 # colorRampPalette(c("white","#1BA0AA"))(25)),
+                 colorRampPalette(c("white","#DB3F3B"))(25)),
+                 # colorRampPalette(c("white","#334FDC"))(25)),
+         breaks = c(rev(seq(from = 0, to = min(as.vector(heat_mat[4,])),length.out = 25))[-25],seq(from = 0, to = log2(threshold+1),length.out = 25)),
+         border_color = "white"
+)
+##--------------------------------------------------------------------------------------------

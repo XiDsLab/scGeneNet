@@ -1,0 +1,26 @@
+{
+    "id": "9EFB1CCA",
+    "path": "D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients/Downstream analysis/Rcode/Part6_expression visualization for potential target.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1650204682688.0,
+    "source_on_save": false,
+    "relative_order": 18,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "52,16",
+        "scrollLine": "9"
+    },
+    "folds": "11|94|12|138|\n16|94|20|90|\n24|94|28|94|\n32|94|46|1|\n53|94|157|1|\n161|94|261|1|\n",
+    "lastKnownWriteTime": 1650205096,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1650205096312,
+    "read_only": false,
+    "read_only_alternatives": []
+}

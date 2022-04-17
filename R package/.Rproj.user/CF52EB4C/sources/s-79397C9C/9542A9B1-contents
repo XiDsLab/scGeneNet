@@ -1,0 +1,91 @@
+rm(list = ls())
+##Hyper-parameter selection
+##1. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+##2. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Data/gold_standard_network_1000.Rdata",sep = ""))
+load(paste(File_path,"/Data/TF_list_all.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##3. Description of data
+##--------------------------------------------------------------------------------------------
+## TF
+TF_index<-which(colnames(gold_standard_network) %in% TF_list_all[[1]])
+## number of candiate edge
+num_edge_support<-as.numeric(table(c((gold_standard_network[TF_index,TF_index])[upper.tri(gold_standard_network[TF_index,TF_index])],as.vector(gold_standard_network[TF_index,-TF_index])))[2])
+## The patient list
+patient_vec<-c(paste("O",1:3,sep = ""),"S1",paste("C",1:5,sep = ""))
+## The cell-type list
+celltype_vec<-paste("Group",1:4,sep = "")
+##--------------------------------------------------------------------------------------------
+
+##4. hyper-parameter selection with specific density of GRN
+##--------------------------------------------------------------------------------------------
+##
+density_choose<-0.05
+##
+GRN_patient_specific<-list() 
+for(patient_index in 1:length(patient_vec)){
+  print(paste("Hyper-parameter selection for patient: ",patient_vec[patient_index],sep = ""))
+  load(paste(File_path,"/Train model/Output_obj/scGeneNet_result_",patient_vec[patient_index],".Rdata",sep = ""))
+  ##
+  num_celltype<-nrow(result_all$BIC_mat_shrink1)
+  GRN_density_array<-array(NA,dim = c(1000,1000,num_celltype),dimnames = list(colnames(gold_standard_network),colnames(gold_standard_network),celltype_vec[1:num_celltype]))
+  for(celltype_index in 1:num_celltype){
+    
+    ##summary the density
+    density_GRN_vec<-c()
+    for(l in 1:(dim(result_all$Theta_mat_array_hat_all)[4])){
+      GRN_use<-result_all$Theta_mat_array_hat_all[,,celltype_index,l]
+      density_GRN_vec<-c(density_GRN_vec,length(which(GRN_use[upper.tri(GRN_use)][which(gold_standard_network[upper.tri(gold_standard_network)] == 1)] != 0))/length(GRN_use[upper.tri(GRN_use)][which(gold_standard_network[upper.tri(gold_standard_network)] == 1)]))
+    }
+    ##choose the GRN with specific density
+    if(length(which(density_GRN_vec>density_choose))==0){
+      density_sel_index<-min(which(!(is.na(result_all$BIC_mat_shrink[1,]))))
+    }else{
+      density_sel_index<-max(which(density_GRN_vec>density_choose))
+    }
+    ##transform the precision matrix to partial correlation matrix as confidence matrix
+    pre_mat<-result_all$Theta_mat_array_hat_all[,,celltype_index,density_sel_index]
+    corr_mat<-(-1 * pre_mat)/(matrix(sqrt(diag(pre_mat)),ncol = 1) %*% matrix(sqrt(diag(pre_mat)),nrow = 1))
+    diag(corr_mat)<-1
+    ## choose the top edge
+    sel_edge_index<-(which(gold_standard_network[upper.tri(gold_standard_network)] == 1))[order(abs(corr_mat[upper.tri(corr_mat)][which(gold_standard_network[upper.tri(gold_standard_network)] == 1)]),decreasing = TRUE)[1:floor(num_edge_support * density_choose)]]
+    corr_mat_choose<-diag(ncol(corr_mat))
+    corr_mat_choose[upper.tri(corr_mat_choose)][sel_edge_index]<-1
+    corr_mat_choose<-corr_mat_choose + t(corr_mat_choose) - diag(ncol(corr_mat))
+    corr_mat1<-corr_mat * corr_mat_choose
+    ##
+    GRN_density_array[,,celltype_index]<-corr_mat1
+  }
+  GRN_patient_specific[[patient_index]]<-GRN_density_array
+  ##
+  rm(result_all);gc()
+}
+names(GRN_patient_specific)<-patient_vec
+##--------------------------------------------------------------------------------------------
+
+##5. Set the edge out of database as NA
+##--------------------------------------------------------------------------------------------
+nonsupport_index<-which(gold_standard_network[upper.tri(gold_standard_network)]==0)
+for(patient_use in names(GRN_patient_specific)){
+  for(celltype_use in celltype_vec){
+    GRN_use<-GRN_patient_specific[[patient_use]][,,celltype_use]
+    ##
+    
+    GRN_use[upper.tri(GRN_use)][nonsupport_index]<-NA
+    GRN_use <- (GRN_use + t(GRN_use)) /2
+    ##
+    GRN_patient_specific[[patient_use]][,,celltype_use]<-GRN_use
+  }
+}
+##--------------------------------------------------------------------------------------------
+
+##6. Save the patient-specific GRN
+##--------------------------------------------------------------------------------------------
+save(GRN_patient_specific,file = paste(File_path,"/Downstream analysis/Obj_use/GRN_patient specific.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------

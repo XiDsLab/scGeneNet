@@ -1,0 +1,319 @@
+rm(list = ls())
+##Active TFs' GRN visulation
+##1. Package loading
+##--------------------------------------------------------------------------------------------
+library(igraph)
+library(RColorBrewer)
+##--------------------------------------------------------------------------------------------
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+##3. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Downstream analysis/Obj_use/GRN_patient-type specific.Rdata",sep = ""))
+load(paste(File_path,"/Downstream analysis/Obj_use/annotation_row.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##4. Data description & set the celltype for visualization
+##--------------------------------------------------------------------------------------------
+patient_type<-c("MILD","SEV")
+p_TF<-56
+gene_TF<-colnames(GRN_patienttype_specific$Group1$MILD$sign)[1:p_TF]
+##
+celltype_choose<-"Group3"
+if(celltype_choose == "Group1"){
+  TF_constraint<-c("ELF3","ATF3","NR1H3",##active in SEV
+                   "NR4A1","EGR2","EGR1" ## active in MILD
+  ) ## The active TF of Group1
+  TF_constraint_type<-c(rep("ACT_SEV",3),rep("ACT_MILD",3))
+}
+if(celltype_choose == "Group2"){
+  TF_constraint<-c("NR4A1","EGR2","NR1H3","IRF1","JUN",##active in SEV
+                   "ATF3","FOS" ## active in MILD
+  ) ## The active TF of Group2
+  TF_constraint_type<-c(rep("ACT_SEV",5),rep("ACT_MILD",2))
+}
+if(celltype_choose == "Group3"){
+  TF_constraint<-c("NR4A1","NR1H3","EGR2","TCF4","SOX4","JUN",##active in SEV
+                   "EGR3","ATF3","KLF10" ## active in MILD
+  ) ## The active TF of Group3
+  TF_constraint_type<-c(rep("ACT_SEV",6),rep("ACT_MILD",3))
+}
+if(celltype_choose == "Group4"){
+  TF_constraint<-c("TCF4","BHLHE40","JUNB","NR1H3","JUN",##active in SEV
+                   "ELF3","NR4A1","EGR2","ATF3" ## active in MILD
+  ) ## The active TF of Group4 
+  TF_constraint_type<-c(rep("ACT_SEV",5),rep("ACT_MILD",4))
+}
+gene_TF_att<-ifelse(gene_TF %in% TF_constraint[which(TF_constraint_type == "ACT_SEV")],"ACT_SEV",
+                    ifelse(gene_TF %in% TF_constraint[which(TF_constraint_type == "ACT_MILD")],"ACT_MILD","NORMAL"))
+##--------------------------------------------------------------------------------------------
+
+##5.summary the edges' information
+##--------------------------------------------------------------------------------------------
+adjoint_mat_all<-matrix(NA,nrow = 0,ncol = 5)
+bbb<-as.matrix(Reduce("rbind",strsplit(rownames(annotation_row),"_")))
+for(patient_type_use in patient_type){
+  GRN_use<-GRN_patienttype_specific[[celltype_choose]][[patient_type_use]]$strength
+  GRN_sign_use<-GRN_patienttype_specific[[celltype_choose]][[patient_type_use]]$sign
+  ##
+  # TF_choose_vec<-bbb[which(bbb[,1] == celltype_choose & bbb[,2] %in% TF_constraint ),2]
+  TF_choose_vec<-gene_TF
+  ##
+  count<-0
+  for(TF_use in TF_choose_vec){
+    count<- count + 1
+    Target_choose<-which(GRN_use[TF_use,]!=0)
+    if(length(Target_choose)>0){
+      type_res<-ifelse(TF_use %in% TF_constraint,ifelse(TF_use %in% TF_constraint[which(TF_constraint_type == "ACT_SEV")],"ACT_SEV","ACT_MILD"),"NORMAL")
+      ##
+      adjoint_mat_all<-rbind(adjoint_mat_all,cbind(rep(TF_use,length(Target_choose)),
+                                                   names(Target_choose),
+                                                   GRN_use[TF_use,Target_choose] * GRN_sign_use[TF_use,Target_choose],
+                                                   patient_type_use,
+                                                   rep(type_res,length(Target_choose))))
+    }
+  }
+}
+rownames(adjoint_mat_all)<-NULL
+adjoint_mat_all<-as.data.frame(adjoint_mat_all)
+names(adjoint_mat_all)<-c("TF","TARGET","Corr","patient_type","node_type")
+adjoint_mat_all$Corr<-as.numeric(adjoint_mat_all$Corr) 
+adjoint_mat_all$Corr_width<-rank(abs(adjoint_mat_all$Corr))/max(rank(abs(adjoint_mat_all$Corr))) * 5
+##--------------------------------------------------------------------------------------------
+
+##6. Visualize GRN for moderate and severe  patients using igraph package
+##--------------------------------------------------------------------------------------------
+##
+gu<-graph.data.frame(adjoint_mat_all[,c(1,2)],directed = TRUE)
+##node
+V(gu)$color<-ifelse(names(V(gu)) %in% gene_TF, brewer.pal(9,"Purples")[8],brewer.pal(11,"RdGy")[8])
+V(gu)$size<-ifelse(names(V(gu))%in% gene_TF,8,1.5)
+
+##edge
+# E(gu)$color<-"black"
+E(gu)$color<-ifelse(adjoint_mat_all$TF == adjoint_mat_all$TARGET,"white",brewer.pal(11,"RdGy")[8])
+E(gu)$width<-1.5
+
+##layout
+l_my<-layout.fruchterman.reingold(gu)
+rownames(l_my)<-names(V(gu))
+##
+l_my_ori<-l_my
+l_my<-l_my_ori
+##set the patient-type specific GRN to show
+patient_type_use<-"SEV" ## or "MILD"
+gu_sub_delete <- subgraph.edges(graph=gu,
+                                eids = which(adjoint_mat_all$patient_type == patient_type_use),
+                                delete.vertices = TRUE)
+node_delete<-setdiff((V(gu))$name,(V(gu_sub_delete))$name)
+##
+plot(gu_sub_delete,
+     vertex.label.dist = 1.5,
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu_sub_delete)) %in% adjoint_mat_all[,1],1e-10,1e-30),
+     vertex.label.font = ifelse(names(V(gu_sub_delete)) %in% adjoint_mat_all[,1],2,1e-30),
+     vertex.label.color = "white",
+     layout = l_my[-which((V(gu))$name %in% node_delete),])
+##--------------------------------------------------------------------------------------------
+
+##1. Remove the TF for ACTive in MILD and SEV and normal TF
+
+##
+dis_use<-0
+radius_choose<-4
+radius_choose_normal<-6
+min_dist<-1.2
+set.seed(123)
+l_my_change<-l_my[-which((V(gu))$name %in% node_delete),]
+TF_point_mat_cur<-NULL
+for(node_type_use in c("ACT_MILD","ACT_SEV","NORMAL")){
+  ##ACT_MILD or ACT_SEV
+  if(node_type_use != "NORMAL"){
+    gene_TF_choose<-gene_TF[which(gene_TF_att == node_type_use)]
+    ####
+    num_TF<-length(gene_TF_choose)
+    num_potential_point<-num_TF * 2 + 2
+    alpha_each <- 2 * pi /num_potential_point
+    # center_point<-NULL
+    # if(node_type_use == "ACT_MILD"){
+    #   center_point<-c(0,(-1) * dis_use)
+    # }
+    # if(node_type_use == "ACT_SEV"){
+    #   center_point<-c(0,(1) * dis_use)
+    # }
+    center_point<-c(0,0)
+    ##
+    TF_point_mat<-matrix(NA,nrow = 2,ncol = 0)
+    for(num_TF_index in 1:num_potential_point){
+      alpha_use<-(num_TF_index-1) * alpha_each
+      TF_point_mat<-cbind(TF_point_mat,c(radius_choose * cos(alpha_use) + center_point[1],
+                                         radius_choose * sin(alpha_use) + center_point[2] +
+                                           ifelse(node_type_use == "ACT_MILD",-1,1) * dis_use))
+    }
+    TF_point_mat_cur<-TF_point_mat
+    if(node_type_use == "ACT_MILD"){
+      TF_point_mat_choose<-TF_point_mat[,order(TF_point_mat[2,],decreasing = FALSE)[1:num_TF]]
+    }else{
+      TF_point_mat_choose<-TF_point_mat[,order(TF_point_mat[2,],decreasing = TRUE)[1:num_TF]]
+    }
+    ##
+    TF_order<-gene_TF_choose
+    ##
+    for(num_TF_index in 1:num_TF){
+      l_my_change[TF_order[num_TF_index],]<-as.vector(TF_point_mat_choose[,num_TF_index])
+    }
+  }else{
+    gene_TF_choose<-gene_TF[which(gene_TF_att == node_type_use)]
+    num_TF<-length(gene_TF_choose)
+    ##determine the area
+    center_point<-c(0,0)
+    # radius_choose_normal
+    
+    TF_point_mat<-matrix(NA,nrow = 2,ncol = 0)
+    for(num_TF_index in 1:num_TF){
+      con_1<-TRUE
+      while (con_1) {
+        x_rand<-runif(1,min = (-1) * radius_choose_normal, max = (1) * radius_choose_normal)
+        y_rand<-runif(1,min = (-1) * radius_choose_normal, max = (1) * radius_choose_normal)
+          ##judge
+          if(min(sqrt(colSums((cbind(TF_point_mat,TF_point_mat_cur) - c(x_rand,y_rand))^2)))>min_dist){
+            con_1<-FALSE
+            TF_point_mat<-cbind(TF_point_mat,c(x_rand,y_rand))
+          }
+      }
+      alpha_use<-(num_TF_index-1) * alpha_each
+      TF_point_mat<-cbind(TF_point_mat,c(radius_choose_normal * sin(alpha_use) + center_point[1],
+                                         radius_choose_normal * cos(alpha_use) + center_point[2]))
+    }
+    ##
+    TF_order<-gene_TF_choose
+    ##
+    for(num_TF_index in 1:num_TF){
+      l_my_change[TF_order[num_TF_index],]<-as.vector(TF_point_mat[,num_TF_index])
+    }
+  }
+}
+
+plot(gu_sub_delete,
+     vertex.label.dist = 1.5,
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu_sub_delete)) %in% gene_TF,1e-10,1e-30),
+     vertex.label.font = ifelse(names(V(gu_sub_delete)) %in% gene_TF,2,1e-30),
+     vertex.label.color = "white",
+     layout = l_my_change)
+
+######################
+adjoint_mat_sub<-adjoint_mat_all[which(adjoint_mat_all$patient_type == patient_type_use),]
+##
+scale_factor<-1
+for(target_use in setdiff(unique(adjoint_mat_sub$TARGET),unique(adjoint_mat_sub$TF))){
+  adjoint_mat_sub_target<-adjoint_mat_sub[which(adjoint_mat_sub$TARGET == target_use),]
+  if(length(unique(adjoint_mat_sub_target$node_type)) == 1){
+    arrange_TF<-adjoint_mat_sub_target[which.max(abs(adjoint_mat_sub_target$Corr)),"TF"]
+    ##
+    move_vec<-l_my_change[target_use,] - l_my_change[arrange_TF,]
+    move_vec<-move_vec / (as.vector(sqrt((move_vec[1])^2 + (move_vec[2])^2)) / scale_factor)
+
+    l_my_change[target_use,]<-move_vec + l_my_change[arrange_TF,]
+  }else{
+    l_my_change[target_use,]<-colSums(abs(adjoint_mat_sub_target$Corr) * l_my_change[adjoint_mat_sub_target$TF,])/sum(abs(adjoint_mat_sub_target$Corr))
+  }
+
+}
+
+plot(gu_sub_delete,
+     vertex.label.dist = 1.5,
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu_sub_delete)) %in% gene_TF,1e-10,1e-30),
+     vertex.label.font = ifelse(names(V(gu_sub_delete)) %in% gene_TF,2,1e-30),
+     vertex.label.color = "white",
+     layout = l_my_change)
+
+##adjust the unique target node
+for(gene_TF_choose in TF_constraint){
+  adjoint_mat_sub_sub<-adjoint_mat_sub[which(adjoint_mat_sub$TF == gene_TF_choose),]
+  target_pot<-unique(setdiff(adjoint_mat_sub_sub$TARGET,gene_TF_choose))
+
+  unique_target_vec<-c()
+  for(target_pot_use in target_pot){
+    if(length(unique(adjoint_mat_sub[which(adjoint_mat_sub$TARGET == target_pot_use),"TF"])) == 1){
+      unique_target_vec<-c(unique_target_vec,target_pot_use)
+    }
+  }
+  ##
+  num_TARGET<-length(unique_target_vec)
+  alpha_each <- 2 * pi /num_TARGET
+  center_point<-l_my_change[gene_TF_choose,]
+
+  TARGET_point_mat<-matrix(NA,nrow = 2,ncol = 0)
+  for(num_TARGET_index in 1:num_TARGET){
+    alpha_use<-(num_TARGET_index-1) * alpha_each
+    TARGET_point_mat<-cbind(TARGET_point_mat,c(scale_factor * sin(alpha_use) + center_point[1],
+                                               scale_factor * cos(alpha_use) + center_point[2]))
+  }
+  ##
+  TARGET_order<-unique_target_vec
+  ##
+  for(num_TARGET_index in 1:num_TARGET){
+    l_my_change[TARGET_order[num_TARGET_index],]<-as.vector(TARGET_point_mat[,num_TARGET_index])
+  }
+  ##
+}
+
+plot(gu_sub_delete,
+     vertex.label.dist = 1.5,
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu_sub_delete)) %in% gene_TF,1e-10,1e-30),
+     vertex.label.font = ifelse(names(V(gu_sub_delete)) %in% gene_TF,2,1e-30),
+     vertex.label.color = "white",
+     layout = l_my_change)
+
+##degree
+degree_vec<-c()
+for(gene_use in names(V(gu_sub_delete))){
+  if(gene_use %in% gene_TF){
+    degree_vec<-c(degree_vec,(sum(abs(adjoint_mat_sub[which(adjoint_mat_sub$TF == gene_use),"Corr"])) - 1))
+  }else{
+    degree_vec<-c(degree_vec,NA)
+  }
+}
+
+
+V(gu_sub_delete)$size<-ifelse(is.na(degree_vec),1.5,2.5 + log2(degree_vec * 5 + 1) * 3)
+
+plot(gu_sub_delete,
+     vertex.label.dist = 1.5,
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu_sub_delete)) %in% gene_TF,1e-10,1e-30),
+     vertex.label.font = ifelse(names(V(gu_sub_delete)) %in% gene_TF,2,1e-30),
+     vertex.label.color = "white",
+     layout = l_my_change)
+
+plot(gu_sub_delete,
+     vertex.label.dist = 1.5,
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu_sub_delete)) %in% gene_TF,1,1e-30),
+     vertex.label.font = ifelse(names(V(gu_sub_delete)) %in% gene_TF,2,1e-30),
+     vertex.label.color = "black",
+     layout = l_my_change)
+
+##degree annotation
+if(patient_type_use == "MILD"){
+  degree_MILD<-degree_vec[1:56][gene_TF %in% TF_constraint] 
+}
+if(patient_type_use == "SEV"){
+  degree_SEV<-degree_vec[1:56][gene_TF %in% TF_constraint]
+}
+##
+gene_TF[gene_TF %in% TF_constraint]
+gene_TF[gene_TF %in% TF_constraint[which(TF_constraint_type == "ACT_SEV")]]
+gene_TF[gene_TF %in% TF_constraint[which(TF_constraint_type == "ACT_MILD")]]
+
+
+c(degree_MILD,degree_SEV)[order(c(degree_MILD,degree_SEV),decreasing = TRUE)[round(seq(from = 1, to =length(gene_TF[gene_TF %in% TF_constraint]) * 2,length.out = 5))]]
+c(gene_TF[gene_TF %in% TF_constraint],gene_TF[gene_TF %in% TF_constraint])[order(c(degree_MILD,degree_SEV),decreasing = TRUE)[round(seq(from = 1, to =length(gene_TF[gene_TF %in% TF_constraint]) * 2,length.out = 5))]]
+c(rep("MILD",length(gene_TF[gene_TF %in% TF_constraint])),rep("SEV",length(gene_TF[gene_TF %in% TF_constraint])))[order(c(degree_MILD,degree_SEV),decreasing = TRUE)[round(seq(from = 1, to =length(gene_TF[gene_TF %in% TF_constraint]) * 2,length.out = 5))]]

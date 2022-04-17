@@ -1,0 +1,71 @@
+rm(list = ls())
+##Exact patient-type (Moderate and Severe) specific GRN
+
+##1. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+##2. Load data 
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Downstream analysis/Obj_use/GRN_patient specific.Rdata",sep = ""))
+load(paste(File_path,"/Data/TF_list_all.Rdata",sep = ""))
+load(paste(File_path,"/Data/gold_standard_network_1000.Rdata",sep = ""))
+num_cells<-read.csv(paste(File_path,"/Data/The number of cells.csv",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##3. Description of data
+##--------------------------------------------------------------------------------------------
+## patient ID
+patient_vec<-c(paste("O",1:3,sep = ""),"S1",paste("C",1:5,sep = ""))
+## patient type
+patient_type_vec<-c(rep("MILD",3),rep("SEV",6))
+## cell type
+celltype_vec<-paste("Group",1:4,sep = "")
+## density_choose
+density_choose<-0.05
+##--------------------------------------------------------------------------------------------
+
+##4. Exact the patient-type specific GRN by weighted average the partial correlation matrix
+##Note: the weight is determined by the sample size of data
+##Since the number of cell in patient "M3" is not large enough, the GRN related to patient "M3" is not considerable.
+##
+##--------------------------------------------------------------------------------------------
+GRN_patienttype_specific<-list()
+for(celltype_use in celltype_vec){
+  for(patient_type_use in c("MILD","SEV")){
+    patient_sel_vec<-which(patient_type_vec == patient_type_use)
+    if(patient_type_use == "MILD"){
+      patient_sel_vec<-setdiff(patient_sel_vec,3)
+    }
+    ##weight
+    weight_vec<-num_cells[patient_sel_vec,celltype_use]
+    weight_vec<-weight_vec/sum(weight_vec)
+    ##
+    GRN_use0<-matrix(0,ncol = dim(GRN_patient_specific[[1]])[1],nrow = dim(GRN_patient_specific[[1]])[1])
+    for(patient_index in patient_sel_vec){
+      GRN_use<-GRN_patient_specific[[patient_index]][,,celltype_use]
+      GRN_use0<-GRN_use0 + GRN_use * weight_vec[which(patient_sel_vec == patient_index)]
+    }
+    
+    ####
+    sign_merge<-sign(GRN_use0)
+    strength_merge<-abs(GRN_use0)
+    
+    ##choose the top edge
+    strength_threshold<-as.numeric(quantile(strength_merge[upper.tri(strength_merge)],(1 - density_choose),na.rm = TRUE))
+    choose_mat<-ifelse(strength_merge>=strength_threshold,1,0)
+    sign_merge<-sign_merge * choose_mat
+    strength_merge<-strength_merge * choose_mat
+    ##
+    ##
+    GRN_patienttype_specific[[celltype_use]][[patient_type_use]][["sign"]]<-sign_merge
+    GRN_patienttype_specific[[celltype_use]][[patient_type_use]][["strength"]]<-strength_merge
+  }
+}
+##--------------------------------------------------------------------------------------------
+
+##5. Save patient-type specific GRN
+##--------------------------------------------------------------------------------------------
+save(GRN_patienttype_specific,file = paste(File_path,"/Downstream analysis/Obj_use/GRN_patient-type specific.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------

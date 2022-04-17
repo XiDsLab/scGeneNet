@@ -1,0 +1,140 @@
+#part4 visulization
+rm(list = ls())
+
+##1. Loading packages
+##--------------------------------------------------------------------------------------------
+library(ggplot2)
+library(RColorBrewer)
+##--------------------------------------------------------------------------------------------
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Benchmarking on scRNA-seq data/Kang's file"
+##--------------------------------------------------------------------------------------------
+
+##3. Set the order of celltype and method
+##--------------------------------------------------------------------------------------------
+celltype_reorder<-c("CD14 Mono","CD16 Mono","DC","CD4 Naive T","CD4 Memory T","CD8 T","NK","T activated","B","B Activated")
+method_order<-c(c(c("scGeneNet","VPLN","GENIE3","PIDC","Glasso","ppcor"))) 
+##--------------------------------------------------------------------------------------------
+
+##4. Load data
+##--------------------------------------------------------------------------------------------
+load(file = paste(File_path,"/Evaluation/Obj_use/AUPR_ratio_res_densy.Rdata",sep = ""))
+load(file = paste(File_path,"/Evaluation/Obj_use/EPR_res_densy.Rdata",sep = ""))
+load(paste(File_path,"/Method/scGeneNet/Output_Obj/scGeneNet_list_initial.Rdata",sep = ""))
+load(paste(File_path,"/Data/cluster_true.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##5. Description of data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Evaluation/Obj_use/description_data.Rdata",sep = ""))
+celltypes_num<-as.numeric(description_data["celltypes_num"])
+p_TF<-as.numeric(description_data["p_TF"])
+p_nonTF<-as.numeric(description_data["p_nonTF"])
+p_GRN<-as.numeric(description_data["p_GRN"])
+celltype_order<-colnames(table(apply(scGeneNet_list$U_mat,MARGIN = 1,which.max),cluster_true))[apply(table(apply(scGeneNet_list$U_mat,MARGIN = 1,which.max),cluster_true),MARGIN = 1,which.max)]
+##--------------------------------------------------------------------------------------------
+
+##6. Visualization for each criterion
+##--------------------------------------------------------------------------------------------
+##6.1 AUPR
+AUPR_ratio_res_densy_nor<-AUPR_ratio_res_densy
+AUPR_ratio_res_densy_nor<-sapply(X = 1:celltypes_num,FUN = function(g){return((AUPR_ratio_res_densy[,g])/(max(AUPR_ratio_res_densy[,g])))})
+colnames(AUPR_ratio_res_densy_nor)<-colnames(AUPR_ratio_res_densy)
+AUPR_ratio_res_densy_nor<-ifelse(AUPR_ratio_res_densy >=1,AUPR_ratio_res_densy_nor,NA)
+##
+plotdata_AUPR_densy<-data.frame(Method = rep(rownames(AUPR_ratio_res_densy_nor),ncol(AUPR_ratio_res_densy_nor)),
+                     Celltype = rep(colnames(AUPR_ratio_res_densy_nor),each = nrow(AUPR_ratio_res_densy_nor)),
+                     AUPR_ratio = as.vector(AUPR_ratio_res_densy_nor))
+plotdata_AUPR_densy$Method<-factor(plotdata_AUPR_densy$Method,levels = rev(method_order))
+plotdata_AUPR_densy$Celltype<-factor(plotdata_AUPR_densy$Celltype,levels = celltype_reorder)
+plotdata_AUPR_densy$AUPR_ratio<-as.numeric(plotdata_AUPR_densy$AUPR_ratio)
+
+anno_data<-matrix(NA,nrow = 0,ncol = 3)
+for(g in 1:celltypes_num){
+  num_method_nonNA<-sum(!is.na(AUPR_ratio_res_densy_nor[,g]))
+  anno_data<-rbind(anno_data,  cbind(rep(celltype_order[g],num_method_nonNA),
+                                     names(AUPR_ratio_res_densy[!is.na(AUPR_ratio_res_densy_nor[,g]),g]),
+                                     as.vector(round(AUPR_ratio_res_densy[!is.na(AUPR_ratio_res_densy_nor[,g]),g],1))))
+}
+anno_data<-as.data.frame(anno_data)
+names(anno_data)<-c("Celltype","Method","AUPR_ratio")
+anno_data$Celltype<-factor(anno_data$Celltype,levels = celltype_reorder)
+anno_data$Method<-factor(anno_data$Method,levels = rev(method_order))
+anno_data$AUPR_ratio<-as.numeric(anno_data$AUPR_ratio)
+
+p_AUPR_densy<-ggplot(data = plotdata_AUPR_densy,aes(x = Celltype, y = Method)) + geom_tile(aes(fill = AUPR_ratio),width = 0.95)+
+  scale_fill_gradientn(colours = c("#C8E020","#1F908B","#481F71"),
+                       values = c(1,0.5,0),
+                       na.value = "grey20",
+                       limits = c(0,1),
+                       breaks = seq(from = 0,to = 1,length.out = 11),
+                       labels = rep("",11))+
+  geom_text(data = anno_data,aes(x = Celltype, y = Method,label = AUPR_ratio),size = 1.5*2.5,cex = 6*4)+
+  theme(axis.title = element_blank(),
+        # axis.text = element_blank(), ##hide the name of methods and cell-types
+        axis.text.x = element_text(angle = 90),
+        legend.position="none",
+        legend.key.height = unit(120,"pt"),
+        legend.key.width = unit(120,"pt"),
+        axis.ticks=element_blank(),
+        panel.background = element_rect(fill = "transparent"),
+        panel.grid = element_blank(),
+        plot.background = element_rect(fill = "transparent"),
+        panel.border = element_blank())+
+  guides(color = FALSE)+
+  labs(fill = "")
+
+p_AUPR_densy
+ggsave(paste(File_path,"/Evaluation/picture_heatmap/AUPR_Kang.jpg",sep = ""),width = 4,height = 5,scale = 1,dpi = 300,bg = "transparent")
+
+##6.2 EPR
+EPR_res_densy_nor<-EPR_res_densy
+EPR_res_densy<-ifelse(is.finite(EPR_res_densy),EPR_res_densy,NaN)
+EPR_res_densy_nor<-sapply(X = 1:celltypes_num,FUN = function(g){return((EPR_res_densy[,g])/(max((EPR_res_densy[,g])[which((!is.nan(EPR_res_densy[,g])) & (is.finite(EPR_res_densy[,g])))])))})
+colnames(EPR_res_densy_nor)<-colnames(EPR_res_densy)
+EPR_res_densy_nor<-ifelse(EPR_res_densy >=1,EPR_res_densy_nor,NA)
+plotdata_EPR_densy<-data.frame(Method = rep(rownames(EPR_res_densy_nor),ncol(EPR_res_densy_nor)),
+                                Celltype = rep(colnames(EPR_res_densy_nor),each = nrow(EPR_res_densy_nor)),
+                                EPR_ratio = as.vector(EPR_res_densy_nor))
+plotdata_EPR_densy$Method<-factor(plotdata_EPR_densy$Method,levels = rev(method_order))
+plotdata_EPR_densy$Celltype<-factor(plotdata_EPR_densy$Celltype,levels = celltype_reorder)
+plotdata_EPR_densy$EPR_ratio<-as.numeric(plotdata_EPR_densy$EPR_ratio)
+
+anno_data<-matrix(NA,nrow = 0,ncol = 3)
+for(g in 1:celltypes_num){
+  num_method_nonNA<-sum(!is.na(EPR_res_densy_nor[,g]))
+  anno_data<-rbind(anno_data,  cbind(rep(celltype_order[g],num_method_nonNA),
+                                     names(EPR_res_densy[!is.na(EPR_res_densy_nor[,g]),g]),
+                                     as.vector(round(EPR_res_densy[!is.na(EPR_res_densy_nor[,g]),g],1))))
+}
+anno_data<-as.data.frame(anno_data)
+names(anno_data)<-c("Celltype","Method","EPR_ratio")
+anno_data$Celltype<-factor(anno_data$Celltype,levels = celltype_reorder)
+anno_data$Method<-factor(anno_data$Method,levels = rev(method_order))
+anno_data$EPR_ratio<-as.numeric(anno_data$EPR_ratio)
+
+p_EPR_densy<-ggplot(data = plotdata_EPR_densy,aes(x = Celltype, y = Method)) + geom_tile(aes(fill = EPR_ratio),width = 0.95)+
+  scale_fill_gradientn(colours = c("#FDDD9F","#DD4968","#57147D"),
+                       values = c(1,0.5,0),
+                       na.value = "grey20",
+                       limits = c(0,1),
+                       breaks = seq(from = 0,to = 1,length.out = 11),
+                       labels = rep("",11))+
+  geom_text(data = anno_data,aes(x = Celltype, y = Method,label = EPR_ratio),size = 1.5*2.5,cex = 6*4)+
+  theme(axis.title = element_blank(),
+        # axis.text = element_blank(), ##hide the name of methods and cell-types
+        axis.text.x = element_text(angle = 90),
+        legend.position="none",
+        legend.key.height = unit(120,"pt"),
+        legend.key.width = unit(120,"pt"),
+        axis.ticks=element_blank(),
+        panel.background = element_rect(fill = "transparent"),
+        panel.grid = element_blank(),
+        plot.background = element_rect(fill = "transparent"))+
+  guides(color = FALSE)+
+  labs(fill = "")
+p_EPR_densy
+ggsave(paste(File_path,"/Evaluation/picture_heatmap/EPR_Kang.jpg",sep = ""),width = 4,height = 5,scale = 1,dpi = 300,bg = "transparent")
+##--------------------------------------------------------------------------------------------

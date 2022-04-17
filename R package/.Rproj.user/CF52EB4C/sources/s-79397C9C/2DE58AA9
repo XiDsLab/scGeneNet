@@ -1,0 +1,26 @@
+{
+    "id": "2DE58AA9",
+    "path": "D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients/Downstream analysis/Rcode/Part1_exact patient type-specific GRN.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1650204102811.0,
+    "source_on_save": false,
+    "relative_order": 13,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "53,4",
+        "scrollLine": "44"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1650204334,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1650204334891,
+    "read_only": false,
+    "read_only_alternatives": []
+}

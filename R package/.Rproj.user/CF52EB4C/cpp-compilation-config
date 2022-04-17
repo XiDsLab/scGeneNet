@@ -1,0 +1,24 @@
+{
+    "args": [
+        "-std=gnu++11",
+        "-IF:/PROGRA~1/R/R-41~1.2/include",
+        "-DNDEBUG",
+        "-fopenmp",
+        "-IF:/Users/TJJ/OneDrive/R/win-library/4.1/Rcpp/include",
+        "-IF:/Users/TJJ/OneDrive/R/win-library/4.1/RcppArmadillo/include",
+        "-IF:/Users/TJJ/OneDrive/R/win-library/4.1/RcppEigen/include",
+        "-nostdinc",
+        "-IF:/Program Files/rtools40/mingw64/include/c++/8.3.0",
+        "-IF:/Program Files/rtools40/mingw64/include/c++/8.3.0/x86_64-w64-mingw32",
+        "-IF:/Program Files/rtools40/mingw64/include/c++/8.3.0/backward",
+        "-IF:/Program Files/rtools40/mingw64/lib/gcc/x86_64-w64-mingw32/8.3.0/include",
+        "-IF:/Program Files/rtools40/mingw64/include",
+        "-IF:/Program Files/rtools40/mingw64/lib/gcc/x86_64-w64-mingw32/8.3.0/include-fixed",
+        "-IF:/Program Files/rtools40/mingw64/x86_64-w64-mingw32/include"
+    ],
+    "pch": "RcppArmadillo",
+    "is_cpp": true,
+    "hash": "165018584916501854771650185477",
+    "compiler": "14695981039346656037",
+    "rversion": "4.1.2"
+}

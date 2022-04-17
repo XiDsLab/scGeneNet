@@ -1,0 +1,215 @@
+[
+    {
+        "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+        "file_last_write": 1650186512.0,
+        "definitions": [
+            {
+                "usr": "c:@F@trun_fun#I#d#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "trun_fun(Eigen::MatrixXd, double)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 28,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@trun_vec_fun#I#d#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "trun_vec_fun(Eigen::VectorXd, double)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 44,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@log_cul_mat#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "log_cul_mat(int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 56,
+                "column": 29
+            },
+            {
+                "usr": "c:@F@rowSums_sparse#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "rowSums_sparse(int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 79,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@colSums_sparse#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "colSums_sparse(int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 85,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@stack_fun#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "stack_fun(int, int, int, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 91,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@stack_sparse_fun#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "stack_sparse_fun(int, int, int, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 102,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@ELBO_fast#I#I#I#I#I#I#I#I#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "ELBO_fast(int, Eigen::MatrixXd, int, int, int, Eigen::MatrixXd, Eigen::VectorXd, Eigen::VectorXd, int, Eigen::VectorXd, Eigen::VectorXd, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 115,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@clustering_fun#I#I#I#I#I#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "clustering_fun(int, Eigen::MatrixXd, int, int, int, Eigen::MatrixXd, Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 223,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@celltypes_label_fun#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "celltypes_label_fun(Eigen::MatrixXd)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 294,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@cluster_predict_true_fun#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "cluster_predict_true_fun(Eigen::VectorXi, Eigen::VectorXi, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 310,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@count_group_fun#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "count_group_fun(Eigen::VectorXi)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 335,
+                "column": 5
+            },
+            {
+                "usr": "c:@F@purity_fun#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "purity_fun(Eigen::VectorXi, Eigen::VectorXi, Eigen::VectorXi, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 353,
+                "column": 8
+            },
+            {
+                "usr": "c:@F@MS_update_ratio_fun#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "MS_update_ratio_fun(Eigen::MatrixXi)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 370,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@log_det#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "log_det(int, int, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 385,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@log_det_block#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "log_det_block(int, int, int, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 429,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@log_det_GRN#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "log_det_GRN(int, int, int, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 492,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@ADMM1#I#I#I#I#I#I#I#I#I#I#d#d#b#b#b#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "ADMM1(int, Eigen::MatrixXd, int, Eigen::VectorXd, Eigen::MatrixXd, Eigen::VectorXd, Eigen::VectorXi, int, int, int, double, double, bool, bool, bool)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 542,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@Newtown#I#I#I#I#I#I#I#I#d#d#b#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "Newtown(Eigen::VectorXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::VectorXd, Eigen::VectorXi, int, int, int, double, double, bool)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 929,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@upper_sparse#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "upper_sparse(int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 1057,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@Theta_fun#I#I#I#I#I#d#I#d#I#b#b#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "Theta_fun(Eigen::MatrixXd, int, int, int, int, double, Eigen::MatrixXd, double, Eigen::VectorXi, bool, bool, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 1080,
+                "column": 12
+            },
+            {
+                "usr": "c:@F@BIC_fun#I#I#I#I#I#I#I#I#I#I#I#I#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "BIC_fun(int, Eigen::MatrixXd, int, int, int, Eigen::MatrixXd, Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd, int, Eigen::VectorXd, int)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 1194,
+                "column": 17
+            },
+            {
+                "usr": "c:@F@scGeneNet_optim#I#I#I#I#I#I#I#I#I#I#I#b#I#d#b#I#d#I#I#d#b#I#d#I#d#d#I#b#",
+                "kind": 6,
+                "parent_name": "",
+                "name": "scGeneNet_optim(Eigen::VectorXi, Eigen::MatrixXd, Eigen::MatrixXd, int, int, Eigen::VectorXd, int, Eigen::VectorXd, Eigen::VectorXi, int, Eigen::MatrixXd, bool, Eigen::VectorXd, double, bool, int, double, int, int, double, bool, int, double, int, double, double, int, bool)",
+                "file": "D:/Project/Pro_VMPLN/package/scGeneNet/scGeneNet/src/scGeneNet_optim.cpp",
+                "line": 1262,
+                "column": 12
+            }
+        ]
+    }
+]

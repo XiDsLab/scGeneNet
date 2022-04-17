@@ -1,0 +1,26 @@
+{
+    "id": "49BCC44E",
+    "path": "D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Benchmarking on scRNA-seq data/Kang's file/Evaluation/Rcode/Part0_Silver Standard GRN.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1650196833648.0,
+    "source_on_save": false,
+    "relative_order": 9,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "288,2",
+        "scrollLine": "285"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1650203084,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1650203084199,
+    "read_only": false,
+    "read_only_alternatives": []
+}

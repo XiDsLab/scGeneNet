@@ -1,0 +1,175 @@
+rm(list = ls())
+##GO analysis
+##1. Package loading
+##--------------------------------------------------------------------------------------------
+library(igraph)
+##--------------------------------------------------------------------------------------------
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+##3. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Downstream analysis/Obj_use/GRN_patient-type specific.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##4. Data description
+##--------------------------------------------------------------------------------------------
+##The cell type to show
+celltype_choose<-"Group4" ## or "Group1", "Group2", "Group3"
+load(paste(File_path,"/Downstream analysis/Obj_use/gene_choose_list_",celltype_choose,".Rdata",sep = ""))
+if(celltype_choose == "Group1"){
+  TF_constraint<-c("ELF3","ATF3","NR1H3",##active in SEV
+                   "NR4A1","EGR2","EGR1" ## active in MILD
+  ) ## The active TF of Group1
+  TF_constraint_type<-c(rep("ACT_SEV",3),rep("ACT_MILD",3))
+}
+if(celltype_choose == "Group2"){
+  TF_constraint<-c("NR4A1","EGR2","NR1H3","IRF1","JUN",##active in SEV
+                   "ATF3","FOS" ## active in MILD
+  ) ## The active TF of Group2
+  TF_constraint_type<-c(rep("ACT_SEV",5),rep("ACT_MILD",2))
+}
+if(celltype_choose == "Group3"){
+  TF_constraint<-c("NR4A1","NR1H3","EGR2","TCF4","SOX4","JUN",##active in SEV
+                   "EGR3","ATF3","KLF10" ## active in MILD
+  ) ## The active TF of Group3
+  TF_constraint_type<-c(rep("ACT_SEV",6),rep("ACT_MILD",3))
+}
+if(celltype_choose == "Group4"){
+  TF_constraint<-c("TCF4","BHLHE40","JUNB","NR1H3","JUN",##active in SEV
+                   "ELF3","NR4A1","EGR2","ATF3" ## active in MILD
+  ) ## The active TF of Group4 
+  TF_constraint_type<-c(rep("ACT_SEV",5),rep("ACT_MILD",4))
+}
+##--------------------------------------------------------------------------------------------
+
+##5. Summary the information of edge related to active TFs for each patient-type
+##--------------------------------------------------------------------------------------------
+adjoint_mat_sign<-matrix(NA,nrow = 0,ncol = 5)
+for(sign_use in c("positive","negative")){
+  if(sign_use == "positive"){
+    sign_choose<-(1)
+  }else{
+    sign_choose<-(-1)
+  }
+  for(patient_use in c("MILD","SEV")){
+    index_TF_choose<-which(as.vector(GRN_patienttype_specific[[celltype_choose]][[patient_use]]$sign[TF_constraint,]) == sign_choose)
+    # GRN_patienttype_specific[[celltype_choose]][[patient_use]]$sign[TF_constraint,]
+    TF_vec<-rep(rownames(GRN_patienttype_specific[[celltype_choose]][[patient_use]]$sign[TF_constraint,]),ncol(GRN_patienttype_specific[[celltype_choose]][[patient_use]]$sign[TF_constraint,]))
+    Target_vec<-rep(colnames(GRN_patienttype_specific[[celltype_choose]][[patient_use]]$sign[TF_constraint,]),each = nrow(GRN_patienttype_specific[[celltype_choose]][[patient_use]]$sign[TF_constraint,]))
+    as.vector(GRN_patienttype_specific[[celltype_choose]][[patient_use]]$strength[TF_constraint,])[index_TF_choose]
+    adjoint_mat_sign<-rbind(adjoint_mat_sign,
+                            cbind(TF_vec[index_TF_choose],Target_vec[index_TF_choose],
+                                  as.vector(GRN_patienttype_specific[[celltype_choose]][[patient_use]]$strength[TF_constraint,])[index_TF_choose],
+                                  rep(patient_use,length(index_TF_choose)),
+                                  rep(sign_use,length(index_TF_choose))))
+  }
+}
+adjoint_mat_sign<-as.data.frame(adjoint_mat_sign)
+names(adjoint_mat_sign)<-c("TF","TARGET","strength","patient","sign")
+adjoint_mat_sign$strength<-as.numeric(adjoint_mat_sign$strength)
+##--------------------------------------------------------------------------------------------
+
+##6. Set one TF that aim to show its corresponding GRN and highlight the target gene in specific GO term
+##--------------------------------------------------------------------------------------------
+##
+TF_choose<-c("NR4A1") 
+##
+#highlight the target gene in the chosen Go term
+GO_term_highlight<-c("response to unfolded protein",
+                     "ERK1 and ERK2 cascade",
+                     "defense response to virus",
+                     "p38MAPK cascade",
+                     "response to endoplasmic reticulum stress",
+                     "regulation of PERK-mediated unfolded protein response") ## Virus infection
+##
+##--------------------------------------------------------------------------------------------
+
+##7. Visualize the GRN of chosen TF for Moderate and Severe
+##--------------------------------------------------------------------------------------------
+##7.1 Preparsion
+target_in_important_GO<-unique(Reduce("c",lapply(X = 1:length(GO_term_highlight), FUN = function(g){return(gene_choose_list[[GO_term_highlight[g]]])})))
+adjoint_mat_sign_sub<-adjoint_mat_sign[which((adjoint_mat_sign$TF %in% TF_choose)),]
+adjoint_mat_sign_sub<-adjoint_mat_sign_sub[which(adjoint_mat_sign_sub$TARGET != TF_choose),]
+adjoint_mat_sign_sub$TF_patient<-paste(adjoint_mat_sign_sub$TF," (",ifelse(adjoint_mat_sign_sub$patient == "MILD","Moderate","Severe"),")",sep = "")
+
+adjoint_mat_sign_sub_SEV<-adjoint_mat_sign_sub[adjoint_mat_sign_sub$patient == "SEV",]
+adjoint_mat_sign_sub_MILD<-adjoint_mat_sign_sub[adjoint_mat_sign_sub$patient == "MILD",]
+common_edge<-names(which(table(c(paste(adjoint_mat_sign_sub_SEV$TF,adjoint_mat_sign_sub_SEV$TARGET,adjoint_mat_sign_sub_SEV$sign,sep = " "),paste(adjoint_mat_sign_sub_MILD$TF,adjoint_mat_sign_sub_MILD$TARGET,adjoint_mat_sign_sub_MILD$sign,sep = " "))) == 2))
+SEV_only_edge<-setdiff(paste(adjoint_mat_sign_sub_SEV$TF,adjoint_mat_sign_sub_SEV$TARGET,adjoint_mat_sign_sub_SEV$sign,sep = " "),paste(adjoint_mat_sign_sub_MILD$TF,adjoint_mat_sign_sub_MILD$TARGET,adjoint_mat_sign_sub_MILD$sign,sep = " "))
+MILD_only_edge<-setdiff(paste(adjoint_mat_sign_sub_MILD$TF,adjoint_mat_sign_sub_MILD$TARGET,adjoint_mat_sign_sub_MILD$sign,sep = " "),paste(adjoint_mat_sign_sub_SEV$TF,adjoint_mat_sign_sub_SEV$TARGET,adjoint_mat_sign_sub_SEV$sign,sep = " "))
+
+adjoint_mat_sign_sub$if_common<-ifelse(paste(adjoint_mat_sign_sub$TF,adjoint_mat_sign_sub$TARGET,adjoint_mat_sign_sub$sign,sep = " ") %in% common_edge,1,0)
+adjoint_mat_sign_sub$if_just_SEV<-ifelse(paste(adjoint_mat_sign_sub$TF,adjoint_mat_sign_sub$TARGET,adjoint_mat_sign_sub$sign,sep = " ") %in% SEV_only_edge,1,0)
+adjoint_mat_sign_sub$if_just_MILD<-ifelse(paste(adjoint_mat_sign_sub$TF,adjoint_mat_sign_sub$TARGET,adjoint_mat_sign_sub$sign,sep = " ") %in% MILD_only_edge,1,0)
+
+##7.2 Visualization by igraph package
+gu<-graph.data.frame(adjoint_mat_sign_sub[,c(6,2)],directed = TRUE)
+l_my<-layout.fruchterman.reingold(gu)
+rownames(l_my)<-names(V(gu))
+
+V(gu)$color <- ifelse(names(V(gu)) %in% names(V(gu))[1:2],brewer.pal(9,"Purples")[8],ifelse(names(V(gu)) %in% target_in_important_GO,"#FF5555",brewer.pal(12,"Set3")[9]))
+# V(gu)$size<-ifelse(names(V(gu))%in% paste(rep(TF_choose,each = 2),c("(Moderate)","(Severe)"),sep = " "),20,15) * 0.5
+V(gu)$size<-ifelse(names(V(gu))%in% c(paste(rep(TF_choose,each = 2),c("(Moderate)","(Severe)"),sep = " "),target_in_important_GO),15,12) * 0.55
+# V(gu)$shape <- ifelse(names(V(gu)) %in% names(V(gu))[1:2],"square","circle")
+V(gu)$shape <- "circle"
+
+E(gu)$color<-c(brewer.pal(9,"Reds")[5],
+               brewer.pal(9,"Blues")[5])[ifelse(adjoint_mat_sign_sub$sign == "positive",1,2)]
+E(gu)$width<-2
+##
+plot(gu,
+     vertex.label.color = ifelse(names(V(gu))%in% paste(rep(TF_choose,each = 2),c("(Moderate)","(Severe)"),sep = " "),"white","black"),
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu))%in% paste(rep(TF_choose,each = 2),c("(Moderate)","(Severe)"),sep = " "),2,
+                              ifelse(names(V(gu)) %in% target_in_important_GO,1.5,1)),
+     vertex.label.font = 2,
+     vertex.label.color = "black",
+     vertex.frame.color = ifelse(names(V(gu)) %in% names(V(gu))[1:2],brewer.pal(9,"Purples")[8],ifelse(names(V(gu)) %in% target_in_important_GO,"#FF5555",brewer.pal(12,"Set3")[9])),
+     vertex.label.family = "Arial",
+     layout = l_my)
+
+l_change<-l_my
+##share target
+
+share_target<-c()
+for(target_use in unique(adjoint_mat_sign_sub$TARGET)){
+  if(length(unique(adjoint_mat_sign_sub[which(adjoint_mat_sign_sub$TARGET == target_use),"patient"]))>1){
+    share_target<-c(share_target,target_use)
+  }
+}
+l_change[share_target,2]<-(l_my[share_target,2] - mean(l_my[share_target,2])) * 1.5 + mean(l_my[share_target,2])
+
+for(target_use in unique(adjoint_mat_sign_sub$TARGET)){
+  if(length(unique(adjoint_mat_sign_sub[which(adjoint_mat_sign_sub$TARGET == target_use),"patient"]))>1){
+    share_target<-c(share_target,target_use)
+  }
+}
+l_change[share_target,1]<-(l_my[share_target,1] - mean(l_my[share_target,1])) * 1.5 + mean(l_my[share_target,1])
+
+plot(gu,
+     vertex.label.color = ifelse(names(V(gu))%in% paste(rep(TF_choose,each = 2),c("(Moderate)","(Severe)"),sep = " "),"white","black"),
+     edge.arrow.size = 0,
+     vertex.label.cex = ifelse(names(V(gu))%in% paste(rep(TF_choose,each = 2),c("(Moderate)","(Severe)"),sep = " "),0.1,
+                               ifelse(names(V(gu)) %in% target_in_important_GO,1.5,1)),
+     vertex.label.font = 2,
+     vertex.label.color = "black",
+     vertex.frame.color = ifelse(names(V(gu)) %in% names(V(gu))[1:2],brewer.pal(9,"Purples")[8],ifelse(names(V(gu)) %in% target_in_important_GO,"#FF5555",brewer.pal(12,"Set3")[9])),
+     vertex.label.family = "Arial",
+     layout = l_change)
+
+target_choose_SEV<-target_in_important_GO[which(target_in_important_GO %in% adjoint_mat_sign_sub[which(adjoint_mat_sign_sub$patient == "SEV"),"TARGET"])]
+target_choose_MILD<-target_in_important_GO[which(target_in_important_GO %in% adjoint_mat_sign_sub[which(adjoint_mat_sign_sub$patient == "MILD"),"TARGET"])]
+target_choose_SEV_only<-setdiff(target_choose_SEV,target_choose_MILD)
+adjoint_mat_sign_sub1<-adjoint_mat_sign_sub[which(adjoint_mat_sign_sub$patient == "SEV"),]
+sign_choose_vec<-c()
+for(i in 1:length(target_choose_SEV_only)){
+  sign_choose_vec<-c(sign_choose_vec,adjoint_mat_sign_sub1[which(adjoint_mat_sign_sub1$TARGET == target_choose_SEV_only[i]),"sign"])
+}
+exp_analysis_obj<-list(target_choose_SEV_only = target_choose_SEV_only,
+                       sign_choose_vec = sign_choose_vec)
+save(exp_analysis_obj,file = paste(File_path,"/Downstream analysis/Obj_use/exp_analysis_obj_",celltype_choose,"_",TF_choose,".Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------

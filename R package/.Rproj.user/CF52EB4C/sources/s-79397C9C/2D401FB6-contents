@@ -1,0 +1,22 @@
+Package: scGeneNet
+Type: Package
+Title: scGeneNet: Variational inference for Mixture Poisson Log-Normal graphial model in Single-cell gene regulatory network analysis with mixed cell populations
+Version: 1.0
+Date: 2022-04-17
+Author: Junjie Tang, Changhu Wang, Feiyi Xiao, Ruibin Xi
+Maintainer: Junjie Tang <junjie.tang@pku.edu.cn>
+Description: scGeneNet is a package for cell-type-specifc gene regulatory inference for Single-cell RNA-seq data with mixed cell populations. Based on the uncentered variational inference, we develop an efficient block-wise decent algorithm called VMPLN to estimate the cell-type-specific precision matrix of interest by minimizing the penalized negative Evidence Low BOund.
+License: GPL (>= 3)
+Imports: Rcpp (>= 1.0.4.6),mltools,data.table,umap,ggplot2, dplyr,
+        tidyr, magrittr, Seurat,cluster,stats,MASS,glasso
+Suggests: knitr, rmarkdown, testthat,methods, openssl,
+        reticulate,RSpectra, parallel, R6, Matrix, nloptr
+        (>= 1.2.0), igraph, grid, gridExtra
+LinkingTo: Rcpp, RcppArmadillo,RcppEigen
+NeedsCompilation: yes
+biocViews: SingleCell RNA-seq, Cell-type-specific Gene Regulatory Network Inference, uncentered variational inference, Software
+LazyData: true
+BugReports: https://github.com/XiDsLab/scGeneNet/issues
+URL: https://github.com/XiDsLab/scGeneNet/
+Depends: 
+    R (>= 2.10)

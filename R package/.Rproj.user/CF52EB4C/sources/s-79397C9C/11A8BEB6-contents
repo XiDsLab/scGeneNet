@@ -1,0 +1,72 @@
+##Evaluation for each method
+
+rm(list = ls())
+#1. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Benchmarking on scRNA-seq data/Zheng's file"
+##--------------------------------------------------------------------------------------------
+
+#2. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Evaluation/Obj_use/weight_mat_scGeneNet_densy.Rdata",sep = ""))
+load(paste(File_path,"/Evaluation/Obj_use/weight_mat_VPLN_densy.Rdata",sep = ""))
+load(paste(File_path,"/Evaluation/Obj_use/weight_mat_Glasso_densy.Rdata",sep = ""))
+load(paste(File_path,"/Evaluation/Obj_use/weight_mat_GENIE3nor_densy.Rdata",sep = ""))
+load(paste(File_path,"/Evaluation/Obj_use/weight_mat_ppcor_densy.Rdata",sep = ""))
+load(paste(File_path,"/Evaluation/Obj_use/weight_mat_PIDCnor_densy.Rdata",sep = ""))
+load(paste(File_path,"/Evaluation/Obj_use/Silver_Standard_GRN.Rdata",sep = ""))
+load(paste(File_path,"/Method/scGeneNet/Output_Obj/scGeneNet_list_initial.Rdata",sep = ""))
+load(paste(File_path,"/Data/cluster_true.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##3. source some functions
+##--------------------------------------------------------------------------------------------
+source(paste(File_path,"/Evaluation/prepare_function/part_of_interest.R",sep = ""))
+source(paste(File_path,"/Evaluation/prepare_function/Eval_fun.R",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##4. Description of data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Evaluation/Obj_use/description_data.Rdata",sep = ""))
+celltypes_num<-as.numeric(description_data["celltypes_num"])
+p_TF<-as.numeric(description_data["p_TF"])
+p_nonTF<-as.numeric(description_data["p_nonTF"])
+p_GRN<-as.numeric(description_data["p_GRN"])
+celltype_order<-colnames(table(apply(scGeneNet_list$U_mat,MARGIN = 1,which.max),cluster_true))[apply(table(apply(scGeneNet_list$U_mat,MARGIN = 1,which.max),cluster_true),MARGIN = 1,which.max)]
+##--------------------------------------------------------------------------------------------
+
+
+##5. Evaluation for each method
+##--------------------------------------------------------------------------------------------
+AUCAUPR_scGeneNet_densy<-Eval_fun(weight_mat_array = weight_mat_scGeneNet_densy,adjoint_true_array = Silver_Standard_GRN,p_TF = p_TF)
+AUCAUPR_VPLN_densy<-Eval_fun(weight_mat_array = weight_mat_VPLN_densy,adjoint_true_array = Silver_Standard_GRN,p_TF = p_TF)
+AUCAUPR_Glasso_densy<-Eval_fun(weight_mat_array = weight_mat_Glasso_densy,adjoint_true_array = Silver_Standard_GRN,p_TF = p_TF)
+AUCAUPR_GENIE3_densy<-Eval_fun(weight_mat_array = weight_mat_GENIE3_densy,adjoint_true_array = Silver_Standard_GRN,p_TF = p_TF)
+AUCAUPR_ppcor_densy<-Eval_fun(weight_mat_array = weight_mat_ppcor_densy,adjoint_true_array = Silver_Standard_GRN,p_TF = p_TF)
+AUCAUPR_PIDC_densy<-Eval_fun(weight_mat_array = weight_mat_PIDC_densy,adjoint_true_array = Silver_Standard_GRN,p_TF = p_TF)
+
+##AUPR
+AUPR_ratio_res_densy<-as.matrix(rbind(AUCAUPR_GENIE3_densy$AUPR_ratio_vec,
+      AUCAUPR_PIDC_densy$AUPR_ratio_vec,
+      AUCAUPR_ppcor_densy$AUPR_ratio_vec,
+      AUCAUPR_scGeneNet_densy$AUPR_ratio_vec,
+      AUCAUPR_VPLN_densy$AUPR_ratio_vec,
+      AUCAUPR_Glasso_densy$AUPR_ratio_vec))
+AUPR_ratio_res_densy<-ifelse(is.nan(AUPR_ratio_res_densy),0,AUPR_ratio_res_densy)
+rownames(AUPR_ratio_res_densy)<-c("GENIE3","PIDC","ppcor","scGeneNet","VPLN","Glasso")
+colnames(AUPR_ratio_res_densy)<-celltype_order
+
+##EPR
+EPR_res_densy<-as.matrix(rbind(AUCAUPR_GENIE3_densy$EPRR_vec,
+                             AUCAUPR_PIDC_densy$EPRR_vec,
+                             AUCAUPR_ppcor_densy$EPRR_vec,
+                             AUCAUPR_scGeneNet_densy$EPRR_vec,
+                             AUCAUPR_VPLN_densy$EPRR_vec,
+                             AUCAUPR_Glasso_densy$EPRR_vec))
+rownames(EPR_res_densy)<-c("GENIE3","PIDC","ppcor","scGeneNet","VPLN","Glasso")
+colnames(EPR_res_densy)<-celltype_order
+##--------------------------------------------------------------------------------------------
+
+##6. Save the result
+save(AUPR_ratio_res_densy,file = paste(File_path,"/Evaluation/Obj_use/AUPR_ratio_res_densy.Rdata",sep = ""))
+save(EPR_res_densy,file = paste(File_path,"/Evaluation/Obj_use/EPR_res_densy.Rdata",sep = ""))

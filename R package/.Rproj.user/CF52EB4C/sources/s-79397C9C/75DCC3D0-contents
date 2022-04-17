@@ -1,0 +1,190 @@
+##Density-specific GRN selection for each method
+rm(list = ls())
+#1. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Benchmarking on scRNA-seq data/Kang's file"
+##--------------------------------------------------------------------------------------------
+
+##2. Description of data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Evaluation/Obj_use/description_data.Rdata",sep = ""))
+celltypes_num<-as.numeric(description_data["celltypes_num"])
+p_TF<-as.numeric(description_data["p_TF"])
+p_nonTF<-as.numeric(description_data["p_nonTF"])
+p_GRN<-as.numeric(description_data["p_GRN"])
+num_support<-p_TF * (p_TF-1)/2 + p_TF * p_nonTF
+##--------------------------------------------------------------------------------------------
+
+##3. set the selected density
+##--------------------------------------------------------------------------------------------
+density_use<-0.05
+densy_choose_vec<-rep(density_use,celltypes_num)
+##--------------------------------------------------------------------------------------------
+
+##4. Exact the confidence matrix of each cell-type for each method
+##--------------------------------------------------------------------------------------------
+##4.1 scGeneNet
+load(paste(File_path,"/Method/scGeneNet/Output_Obj/scGeneNet_result.Rdata",sep = ""))
+##4.1.1 BIC for each cell-type
+BIC_mat_shrink<-result_scGeneNet_list$BIC_mat_shrink1
+BIC_choose_scGeneNet<-apply(BIC_mat_shrink,MARGIN = 1,which.min)
+
+##4.1.2 Summary the density of each candiated GRN
+densy_mat_scGeneNet<-matrix(NA,nrow = celltypes_num,ncol = dim(result_scGeneNet_list$Theta_mat_array_hat_all)[4])
+for(g in 1:celltypes_num){
+  for(l in 1:dim(result_scGeneNet_list$Theta_mat_array_hat_all)[4]){
+    densy_mat_scGeneNet[g,l] <- length(which((c((result_scGeneNet_list$Theta_mat_array_hat_all[1:p_TF,1:p_TF,g,l])[upper.tri(result_scGeneNet_list$Theta_mat_array_hat_all[1:p_TF,1:p_TF,g,l])],as.vector(result_scGeneNet_list$Theta_mat_array_hat_all[1:p_TF,-(1:p_TF),g,l]))) !=0))/num_support
+  }
+}
+
+##4.1.3 choose the lambda with specific density
+densy_choose_scGeneNet<-c()
+for(g in 1:celltypes_num){
+  densy_choose_scGeneNet<-c(densy_choose_scGeneNet,(which(densy_mat_scGeneNet[g,] - densy_choose_vec[g]>0))[which.min((abs(densy_mat_scGeneNet[g,] - densy_choose_vec[g]))[which(densy_mat_scGeneNet[g,] - densy_choose_vec[g]>0)])])
+}
+
+##4.1.4 The result density-specific confidence matrix
+weight_mat_scGeneNet_densy<-array(NA,dim = c(celltypes_num,p_GRN,p_GRN))
+num_edge_choose<-floor(num_support * density_use)
+for(g in 1:celltypes_num){
+  weight_densy<-(-1) * (result_scGeneNet_list$Theta_mat_array_hat_all[,,g,densy_choose_scGeneNet[g]])/(matrix(sqrt(diag((result_scGeneNet_list$Theta_mat_array_hat_all[,,g,densy_choose_scGeneNet[g]]))),ncol = 1) %*% matrix(sqrt(diag((result_scGeneNet_list$Theta_mat_array_hat_all[,,g,densy_choose_scGeneNet[g]]))),nrow = 1))
+  diag(weight_densy)<-1
+  ##
+  choose_mat<-diag(ncol(weight_densy))
+  choose_mat[upper.tri(choose_mat)][order(abs(weight_densy[upper.tri(weight_densy)]),decreasing = TRUE)[1:num_edge_choose]]<-1
+  choose_mat<-choose_mat + t(choose_mat) - diag(ncol(weight_densy))
+  ##
+  weight_densy_choose<-weight_densy * choose_mat
+  weight_mat_scGeneNet_densy[g,,]<-weight_densy_choose
+}
+
+##4.1.5 Save
+save(weight_mat_scGeneNet_densy,file = paste(File_path,"/Evaluation/Obj_use/weight_mat_scGeneNet_densy.Rdata",sep = ""))
+
+
+
+
+
+##4.2 VPLN
+weight_mat_VPLN_densy<-array(NA,dim = c(celltypes_num,p_GRN,p_GRN))
+for(g in 1:celltypes_num){
+  load(paste(File_path,"/Method/VPLN/Output_Obj/BIC_VPLN_vec_pen_top500GRN_g",g,".Rdata",sep = ""))
+  load(paste(File_path,"/Method/VPLN/Output_Obj/graph_VPLN_array_pen_top500GRN_g",g,".Rdata",sep = ""))
+  densy_vec_VPLN<-c()
+  for(l in 1:dim(graph_VPLN_array)[3]){
+    densy_vec_VPLN <- c(densy_vec_VPLN,length(which((c((graph_VPLN_array[1:p_TF,1:p_TF,l])[upper.tri(graph_VPLN_array[1:p_TF,1:p_TF,l])],as.vector(graph_VPLN_array[1:p_TF,-(1:p_TF),l]))) !=0))/length((c((graph_VPLN_array[1:p_TF,1:p_TF,l])[upper.tri(graph_VPLN_array[1:p_TF,1:p_TF,l])],as.vector(graph_VPLN_array[1:p_TF,-(1:p_TF),l])))))
+  }
+  densy_choose_VPLN<-(which(densy_vec_VPLN - densy_choose_vec[g]>0))[which.min((abs(densy_vec_VPLN - densy_choose_vec[g]))[which(densy_vec_VPLN - densy_choose_vec[g]>0)])]
+  ##
+  weight_densy<-(-1) * graph_VPLN_array[,,densy_choose_VPLN]/(matrix(sqrt(diag(graph_VPLN_array[,,densy_choose_VPLN])),ncol = 1) %in% matrix(sqrt(diag(graph_VPLN_array[,,densy_choose_VPLN])),nrow = 1))
+  diag(weight_densy)<-1
+  ##
+  choose_mat<-diag(ncol(weight_densy))
+  choose_mat[upper.tri(choose_mat)][order(abs(weight_densy[upper.tri(weight_densy)]),decreasing = TRUE)[1:num_edge_choose]]<-1
+  choose_mat<-choose_mat + t(choose_mat) - diag(ncol(weight_densy))
+  ##
+  weight_densy_choose<-weight_densy * choose_mat
+  weight_mat_VPLN_densy[g,,]<-weight_densy_choose
+}
+save(weight_mat_VPLN_densy,file = paste(File_path,"/Evaluation/Obj_use/weight_mat_VPLN_densy.Rdata",sep = ""))
+
+
+##4.3 Glasso
+weight_mat_Glasso_densy<-array(NA,dim = c(celltypes_num,p_GRN,p_GRN))
+for(g in 1:celltypes_num){
+  load(paste(File_path,"/Method/Glasso/Output_Obj/BIC_Glasso_vec_pen_top500GRN_g",g,".Rdata",sep = ""))
+  load(paste(File_path,"/Method/Glasso/Output_Obj/graph_lasso_array_pen_top500GRN_g",g,".Rdata",sep = ""))
+  densy_vec_Glasso<-c()
+  for(l in 1:dim(graph_lasso_array)[3]){
+    densy_vec_Glasso <- c(densy_vec_Glasso,length(which((c((graph_lasso_array[1:p_TF,1:p_TF,l])[upper.tri(graph_lasso_array[1:p_TF,1:p_TF,l])],as.vector(graph_lasso_array[1:p_TF,-(1:p_TF),l]))) !=0))/length((c((graph_lasso_array[1:p_TF,1:p_TF,l])[upper.tri(graph_lasso_array[1:p_TF,1:p_TF,l])],as.vector(graph_lasso_array[1:p_TF,-(1:p_TF),l])))))
+  }
+  densy_choose_Glasso<-(which(densy_vec_Glasso - densy_choose_vec[g]>0))[which.min((abs(densy_vec_Glasso - densy_choose_vec[g]))[which(densy_vec_Glasso - densy_choose_vec[g]>0)])]
+  ##
+  weight_densy<-(-1) * graph_lasso_array[,,densy_choose_Glasso]/(matrix(sqrt(diag(graph_lasso_array[,,densy_choose_Glasso])),ncol = 1) %in% matrix(sqrt(diag(graph_lasso_array[,,densy_choose_Glasso])),nrow = 1))
+  diag(weight_densy)<-1
+  ##
+  choose_mat<-diag(ncol(weight_densy))
+  choose_mat[upper.tri(choose_mat)][order(abs(weight_densy[upper.tri(weight_densy)]),decreasing = TRUE)[1:num_edge_choose]]<-1
+  choose_mat<-choose_mat + t(choose_mat) - diag(ncol(weight_densy))
+  ##
+  weight_densy_choose<-weight_densy * choose_mat
+  weight_mat_Glasso_densy[g,,]<-weight_densy_choose
+}
+save(weight_mat_Glasso_densy,file = paste(File_path,"/Evaluation/Obj_use/weight_mat_Glasso_densy.Rdata",sep = ""))
+
+
+##4.4 GENIE3
+load(paste(File_path,"/Data/gene_GRN_intop500HVG.Rdata",sep = ""))
+weight_mat_GENIE3_densy<-array(NA,dim = c(celltypes_num,p_GRN,p_GRN))
+for(g in 1:celltypes_num){
+  load(paste(File_path,"/Method/GENIE3/Output_Obj/weightMatnor_res_use_top500GRN_g",g,".Rdata",sep = ""))
+  ##reorder
+  weight_GENIE3<-matrix(0,nrow = p_GRN,ncol = p_GRN)
+  for(i in 1:p_TF){
+    for(j in 1:p_GRN){
+      weight_GENIE3[i,j]<-weightMat[which(rownames(weightMat) == gene_GRN[i]),which(colnames(weightMat) == gene_GRN[j])]
+    }
+  }
+  weight_GENIE3<-ifelse(is.nan(weight_GENIE3),0,weight_GENIE3)
+  weight_GENIE3<-ifelse(weight_GENIE3>t(weight_GENIE3),weight_GENIE3,t(weight_GENIE3))
+
+  weight_GENIE3_trans<-weight_GENIE3
+  weight_GENIE3_trans[-(1:p_TF),-(1:p_TF)]<-0
+  weight_GENIE3_choose<-diag(p_GRN)
+  index_choose<-order(weight_GENIE3_trans[upper.tri(weight_GENIE3_trans)],decreasing = TRUE)[1:num_edge_choose]
+  weight_GENIE3_choose[upper.tri(weight_GENIE3_choose)][index_choose]<-1
+  weight_GENIE3_choose<-weight_GENIE3_choose + t(weight_GENIE3_choose) - diag(p_GRN)
+  #
+  weight_mat_GENIE3_densy[g,,]<-weight_GENIE3_choose * weight_GENIE3
+}
+save(weight_mat_GENIE3_densy,file = paste(File_path,"/Evaluation/Obj_use/weight_mat_GENIE3nor_densy.Rdata",sep = ""))
+
+
+##4.5 PPCOR
+weight_mat_ppcor_densy<-array(NA,dim = c(celltypes_num,p_GRN,p_GRN))
+for(g in 1:celltypes_num){
+  load(paste(File_path,"/Method/PPCOR/Output_Obj/pearson_pcor_res_use_top500GRN_g",g,".Rdata",sep = ""))
+
+  weight_ppcor_trans<-abs(pcor_res_use)
+  weight_ppcor_trans[-(1:p_TF),-(1:p_TF)]<-0
+  weight_ppcor_choose<-diag(p_GRN)
+  index_choose<-order(weight_ppcor_trans[upper.tri(weight_ppcor_trans)],decreasing = TRUE)[1:num_edge_choose]
+  weight_ppcor_choose[upper.tri(weight_ppcor_choose)][index_choose]<-1
+  weight_ppcor_choose<-weight_ppcor_choose + t(weight_ppcor_choose) - diag(p_GRN)
+  #
+  weight_mat_ppcor_densy[g,,]<-weight_ppcor_choose * pcor_res_use
+}
+save(weight_mat_ppcor_densy,file = paste(File_path,"/Evaluation/Obj_use/weight_mat_ppcor_densy.Rdata",sep = ""))
+
+
+
+##4.6 PIDC
+weight_mat_PIDC_densy<-array(NA,dim = c(celltypes_num,p_GRN,p_GRN))
+for(g in 1:celltypes_num){
+  network_PIDC<-read.table(paste(File_path,"/Method/PIDC/Output_txt/PIDCnor_res_group",g,".txt",sep = ""))
+  ##reorder
+  weight_PIDC<-matrix(0,nrow = p_GRN,ncol = p_GRN)
+  for(i in 1:(p_GRN - 1)){
+    vvv<-network_PIDC[which(network_PIDC$V1 == gene_GRN[i]),]
+    for(j in (i+1):p_GRN){
+      if(nrow(vvv)>0){
+        weight_PIDC[i,j]<-vvv$V3[which(vvv$V2 == gene_GRN[j])]
+      }
+    }
+  }
+  weight_PIDC<-weight_PIDC + t(weight_PIDC)
+  
+  weight_PIDC_trans<-weight_PIDC
+  weight_PIDC_trans[-(1:p_TF),-(1:p_TF)]<-0
+  weight_PIDC_choose<-diag(p_GRN)
+  index_choose<-order(weight_PIDC_trans[upper.tri(weight_PIDC_trans)],decreasing = TRUE)[1:num_edge_choose]
+  weight_PIDC_choose[upper.tri(weight_PIDC_choose)][index_choose]<-1
+  weight_PIDC_choose<-weight_PIDC_choose + t(weight_PIDC_choose) - diag(p_GRN)
+  #
+  weight_mat_PIDC_densy[g,,]<-weight_PIDC_choose * weight_PIDC
+}
+save(weight_mat_PIDC_densy,file = paste(File_path,"/Evaluation/Obj_use/weight_mat_PIDCnor_densy.Rdata",sep = ""))
+# sapply(X = 1:10,FUN = function(g){return(length(which(weight_mat_PIDC_densy[g,,][upper.tri(weight_mat_PIDC_densy[g,,])] !=0)))})
+
+
+##--------------------------------------------------------------------------------------------

@@ -1,0 +1,424 @@
+rm(list = ls())
+##GO analysis
+##1. Package loading
+##--------------------------------------------------------------------------------------------
+library(clusterProfiler)
+library(topGO)
+library(Rgraphviz)
+library(pathview)
+library(org.Hs.eg.db)
+library(pheatmap)
+library(RColorBrewer)
+##--------------------------------------------------------------------------------------------
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+##3. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Downstream analysis/Obj_use/GRN_patient-type specific.Rdata",sep = ""))
+load(paste(File_path,"/Downstream analysis/Obj_use/annotation_row.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+##4. Data description & set the celltype for visualization
+##--------------------------------------------------------------------------------------------
+celltype_choose<-"Group4"
+
+if(celltype_choose == "Group1"){
+  TF_constraint<-c("ELF3","ATF3","NR1H3",##active in SEV
+                   "NR4A1","EGR2","EGR1" ## active in MILD
+  ) ## The active TF of Group1
+  TF_constraint_type<-c(rep("ACT_SEV",3),rep("ACT_MILD",3))
+}
+if(celltype_choose == "Group2"){
+  TF_constraint<-c("NR4A1","EGR2","NR1H3","IRF1","JUN",##active in SEV
+                   "ATF3","FOS" ## active in MILD
+  ) ## The active TF of Group2
+  TF_constraint_type<-c(rep("ACT_SEV",5),rep("ACT_MILD",2))
+}
+if(celltype_choose == "Group3"){
+  TF_constraint<-c("NR4A1","NR1H3","EGR2","TCF4","SOX4","JUN",##active in SEV
+                   "EGR3","ATF3","KLF10" ## active in MILD
+  ) ## The active TF of Group3
+  TF_constraint_type<-c(rep("ACT_SEV",6),rep("ACT_MILD",3))
+}
+if(celltype_choose == "Group4"){
+  TF_constraint<-c("TCF4","BHLHE40","JUNB","NR1H3","JUN",##active in SEV
+                   "ELF3","NR4A1","EGR2","ATF3" ## active in MILD
+  ) ## The active TF of Group4 
+  TF_constraint_type<-c(rep("ACT_SEV",5),rep("ACT_MILD",4))
+}
+gene_GRN<-rownames(GRN_patienttype_specific[[celltype_choose]]$MILD$strength)
+##--------------------------------------------------------------------------------------------
+
+##4. Collect the regulaton of active TFs
+##--------------------------------------------------------------------------------------------
+annotation_row$TF<-as.vector(Reduce("rbind",strsplit(rownames(annotation_row),"_"))[,2])
+Block_heatmap<-c()
+TF_heatmap<-c()
+sign_heatmap<-c()
+target_heatmap<-c()
+patient_heatmap<-c()
+annotation_row_use<-annotation_row[which((annotation_row$Celltype == celltype_choose) & (annotation_row$TF %in% TF_constraint)),]
+for(TF_use in annotation_row_use$TF){
+  GRN_SEV<-GRN_patienttype_specific[[celltype_choose]][["SEV"]]
+  GRN_MILD<-GRN_patienttype_specific[[celltype_choose]][["MILD"]]
+  GRN_SEV_all<-GRN_SEV$strength * GRN_SEV$sign
+  GRN_MILD_all<-GRN_MILD$strength * GRN_MILD$sign
+  ##MILD
+  target_MILD<-setdiff(names(which(GRN_MILD_all[TF_use,]!=0)),TF_use)
+  target_MILD_pos<-target_MILD[which(GRN_MILD_all[TF_use,target_MILD]>0)]
+  target_MILD_neg<-target_MILD[which(GRN_MILD_all[TF_use,target_MILD]<0)]
+  
+  ##SEV
+  target_SEV<-setdiff(names(which(GRN_SEV_all[TF_use,]!=0)),TF_use)
+  target_SEV_pos<-target_SEV[which(GRN_SEV_all[TF_use,target_SEV]>0)]
+  target_SEV_neg<-target_SEV[which(GRN_SEV_all[TF_use,target_SEV]<0)]
+  
+  ##
+  Block_heatmap<-c(Block_heatmap,rep(ifelse(TF_use %in% annotation_row_use$TF[1:5], "Enahnced","Suppressed"),length(target_MILD) + length(target_SEV)))
+  TF_heatmap<-c(TF_heatmap,rep(TF_use,length(target_MILD) + length(target_SEV)))
+  sign_heatmap<-c(sign_heatmap,c(rep("positive",length(target_MILD_pos)),
+                                 rep("negative",length(target_MILD_neg)),
+                                 rep("positive",length(target_SEV_pos)),
+                                 rep("negative",length(target_SEV_neg))))
+  target_heatmap<-c(target_heatmap,c(target_MILD_pos,target_MILD_neg,
+                                     target_SEV_pos,target_SEV_neg))
+  patient_heatmap<-c(patient_heatmap,c(rep("MILD",length(target_MILD)),
+                                       rep("SEV",length(target_SEV))))
+  
+}
+##
+Act_TF_regulation_obj<-data.frame(Block = Block_heatmap,
+                                  TF = TF_heatmap,
+                                  sign = sign_heatmap,
+                                  target = target_heatmap,
+                                  patient = patient_heatmap)
+##--------------------------------------------------------------------------------------------
+
+##5. GO enrichment analysis for (TF) regulated regulation
+##--------------------------------------------------------------------------------------------
+sign_vec<-c("positive","negative") ## regulated regulation is diveide into activation part and inhibition part
+##ALL
+GO_res_all_list_ori<-list()
+GO_res_all_list<-list()
+for(patient_use in c("MILD","SEV")){
+  for(sign_use in sign_vec){
+    print(paste(patient_use,"; ",sign_use))
+    Act_TF_choose<-Act_TF_regulation_obj[which(Act_TF_regulation_obj$sign == sign_use & Act_TF_regulation_obj$patient == patient_use),]
+    gene_col<-unique(Act_TF_choose$target)
+    ##
+    DEG.entrez_id = mapIds(x = org.Hs.eg.db,
+                           keys = gene_col,
+                           keytype = "SYMBOL",
+                           column = "ENTREZID")
+    DEG.entrez_id = na.omit(DEG.entrez_id)
+    erich.go.BP = enrichGO(gene = DEG.entrez_id,
+                           OrgDb = org.Hs.eg.db,
+                           keyType = "ENTREZID",
+                           ont = "BP",
+                           pvalueCutoff = 0.05,
+                           qvalueCutoff = 0.2)
+    GO_res_all_list_ori[[patient_use]][[sign_use]]<-erich.go.BP
+    ##simplify
+    erich.go.BP_sim<-clusterProfiler::simplify(erich.go.BP, cutoff = 0.7,
+                                               by = "p.adjust",
+                                               select_fun = min)
+    
+    GO_res_all_list[[patient_use]][[sign_use]]<-erich.go.BP_sim
+  }
+}
+
+ ##TF-regulation separately
+GO_res_list<-list()
+for(patient_use in c("MILD","SEV")){
+  for(sign_use in sign_vec){
+    Act_TF_choose<-Act_TF_regulation_obj[which(Act_TF_regulation_obj$sign == sign_use & Act_TF_regulation_obj$patient == patient_use),]
+    for(TF_use in TF_constraint){
+      print(paste(patient_use,"; ",sign_use,"; ",TF_use,sep = ""))
+      Act_TF_choose1<-Act_TF_choose[which(Act_TF_choose$TF == TF_use),]
+      gene_col<-unique(Act_TF_choose1$target)
+      if(length(gene_col)>0){
+        DEG.entrez_id = mapIds(x = org.Hs.eg.db,
+                               keys = gene_col,
+                               keytype = "SYMBOL",
+                               column = "ENTREZID")
+        DEG.entrez_id = na.omit(DEG.entrez_id)
+        erich.go.BP = enrichGO(gene = DEG.entrez_id,
+                               OrgDb = org.Hs.eg.db,
+                               keyType = "ENTREZID",
+                               ont = "BP",
+                               pvalueCutoff = 0,
+                               qvalueCutoff = 0)
+        GO_res_list[[patient_use]][[sign_use]][[TF_use]]<-erich.go.BP
+      }
+    }
+  }
+}
+##--------------------------------------------------------------------------------------------
+
+
+##6. Summary the enrichment score of specific GO term for moderate and severe patients and Visualization
+##--------------------------------------------------------------------------------------------
+GO_list_choose<-list()
+for(sign_use in c("positive","negative")){
+  for(patient_active_use in c("MILD","SEV")){
+    xxx<-merge(GO_res_all_list[["SEV"]][[sign_use]]@result,GO_res_all_list[["MILD"]][[sign_use]],by = "Description")
+    xxx<-xxx[which(rowSums(ifelse(cbind(xxx$p.adjust.x,xxx$p.adjust.y)<=5e-2,1,0))>=1),]
+    ##
+    xxx1<-xxx[order((-(log(xxx$p.adjust.x))) / (-(log(xxx$p.adjust.y))),decreasing = ifelse(patient_active_use == "SEV", TRUE,FALSE)),c(1,6,14)]
+    ##
+    if(patient_active_use == "SEV"){
+      xxx1<-xxx1[which(xxx1$p.adjust.x/xxx1$p.adjust.y<1),] 
+    }else{
+      xxx1<-xxx1[which(xxx1$p.adjust.y/xxx1$p.adjust.x<1),] 
+    }
+    xxx1<-xxx1[which(rowSums(ifelse(xxx1<=5e-2,1,0)[,c(2:3)])>=1),]
+    ##
+    xxx2<-xxx1[which((-(log)(xxx1$p.adjust.x)/-(log)(xxx1$p.adjust.y)>(1.2)) | (-(log)(xxx1$p.adjust.x)/-(log)(xxx1$p.adjust.y)<1/(1.2))),]
+    names(xxx2)[c(2,3)]<-c("pvalue_SEV","pvalue_MILD")
+    GO_list_choose[[sign_use]][[patient_active_use]]<-xxx2
+  }
+}
+##
+load(file = paste(File_path,"/Downstream analysis/Obj_use/GO_term_show_list_",celltype_choose,".Rdata",sep = ""))
+######
+strength_mat_tran_list<-list()
+annotation_list<-list()
+for(show_type in c("Enhanced in SEV","Enhanced in MILD")){
+  summary_mat_choose<-matrix(NA,nrow = 0,ncol = 6)
+  for(patient_type_use in c("MILD","SEV")){
+    if(((show_type == "Enhanced in SEV") & (patient_type_use == "SEV")) | (show_type == "Enhanced in MILD") & (patient_type_use == "MILD")){
+      for(add_pos_use in GO_term_show_list[[patient_type_use]][["positive"]]){
+        res_vec<-c(add_pos_use,
+                   ifelse(length(GO_res_all_list_ori$SEV[["positive"]]@result[which(GO_res_all_list_ori$SEV[["positive"]]@result$Description == add_pos_use),"p.adjust"])>0,GO_res_all_list_ori$SEV[["positive"]]@result[which(GO_res_all_list_ori$SEV[["positive"]]@result$Description == add_pos_use),"p.adjust"],1),
+                   ifelse(length(GO_res_all_list_ori$MILD[["positive"]]@result[which(GO_res_all_list_ori$MILD[["positive"]]@result$Description == add_pos_use),"p.adjust"])>0,GO_res_all_list_ori$MILD[["positive"]]@result[which(GO_res_all_list_ori$MILD[["positive"]]@result$Description == add_pos_use),"p.adjust"],1),
+                   "positive")
+        res_vec<-c(res_vec,
+                   -log(as.numeric(res_vec[2])),
+                   -log(as.numeric(res_vec[3])))
+        summary_mat_choose<-rbind(summary_mat_choose,res_vec)
+      } 
+    }
+    if(((show_type == "Enhanced in SEV") & (patient_type_use == "MILD")) | (show_type == "Enhanced in MILD") & (patient_type_use == "SEV")){
+      for(add_neg_use in GO_term_show_list[[patient_type_use]][["negative"]]){
+        res_vec<-c(add_neg_use,
+                   ifelse(length(GO_res_all_list_ori$SEV[["negative"]]@result[which(GO_res_all_list_ori$SEV[["negative"]]@result$Description == add_neg_use),"p.adjust"])>0,GO_res_all_list_ori$SEV[["negative"]]@result[which(GO_res_all_list_ori$SEV[["negative"]]@result$Description == add_neg_use),"p.adjust"],1),
+                   ifelse(length(GO_res_all_list_ori$MILD[["negative"]]@result[which(GO_res_all_list_ori$MILD[["negative"]]@result$Description == add_neg_use),"p.adjust"])>0,GO_res_all_list_ori$MILD[["negative"]]@result[which(GO_res_all_list_ori$MILD[["negative"]]@result$Description == add_neg_use),"p.adjust"],1),
+                   "negative")
+        res_vec<-c(res_vec,
+                   -log(as.numeric(res_vec[2])),
+                   -log(as.numeric(res_vec[3])))
+        summary_mat_choose<-rbind(summary_mat_choose,res_vec)
+      }
+    }
+  } 
+  ##
+  summary_mat_choose<-as.data.frame(summary_mat_choose)
+  names(summary_mat_choose)<-c("Description","pvalue_SEV","pvalue_MILD","sign_type","power_SEV","power_MILD")
+  ##
+  summary_mat_choose$pvalue_SEV<-as.numeric(summary_mat_choose$pvalue_SEV)
+  summary_mat_choose$pvalue_MILD<-as.numeric(summary_mat_choose$pvalue_MILD)
+  summary_mat_choose$power_SEV<-as.numeric(summary_mat_choose$power_SEV)
+  summary_mat_choose$power_MILD<-as.numeric(summary_mat_choose$power_MILD)
+  #################################
+  annotation_row <- data.frame(
+    GO_type = summary_mat_choose$sign_type
+  )
+  des_vec<-summary_mat_choose$Description
+  index_1<-names(which(table(des_vec)>1))
+  if(length(index_1)>1){
+    for(index_1_use in index_1){
+      des_vec[which(des_vec == index_1_use)]<-paste(des_vec[which(des_vec == index_1_use)],"_",1:length(des_vec[which(des_vec == index_1_use)]),sep = "")
+    }
+  }
+  rownames(annotation_row) <- des_vec
+  
+  annotation_col <- data.frame(
+    patient = c("SEV","MILD")
+  )
+  rownames(annotation_col) <- c("SEV","MILD")
+  strength_mat<-summary_mat_choose[,c(5,6)]
+  rownames(strength_mat)<-rownames(annotation_row)
+  colnames(strength_mat)<-rownames(annotation_col)
+  ##reorder
+  row_reorder<-c(which(annotation_row$GO_type == "positive")[order(strength_mat[which(annotation_row$GO_type == "positive"),patient_type_use],decreasing = TRUE)],
+                 which(annotation_row$GO_type == "negative")[order(strength_mat[which(annotation_row$GO_type == "negative"),patient_type_use],decreasing = TRUE)])
+  annotation_row1 <- data.frame(
+    GO_type = annotation_row[row_reorder,]
+  )
+  rownames(annotation_row1) <- rownames(strength_mat[row_reorder,])
+  annotation_list[[show_type]]<-annotation_row1
+  
+  aka = list(GO_type = c(SEV_Active = brewer.pal(9,"Set1")[1], MILD_Active = brewer.pal(9,"Set1")[2]))
+  
+  strength_mat_tran<-ifelse(as.matrix(strength_mat[row_reorder,])>=20,20,as.matrix(strength_mat[row_reorder,]))
+  strength_mat_tran_list[[show_type]]<-strength_mat_tran
+}
+
+mat_heat<-(rbind(strength_mat_tran_list[["Enhanced in SEV"]],strength_mat_tran_list[["Enhanced in MILD"]]))
+mat_anno<- rbind(annotation_list[["Enhanced in SEV"]],annotation_list[["Enhanced in MILD"]])
+mat_heat<-mat_heat * as.vector(ifelse(mat_anno$GO_type == "positive",1,(-1)))
+mat_heat_anno<-rbind(annotation_list[["Enhanced in SEV"]],annotation_list[["Enhanced in MILD"]])
+##reorder by sign
+order_vec<-c(which(mat_anno$GO_type == "positive"),which(mat_anno$GO_type == "negative"))
+mat_heat<-mat_heat[order_vec,]
+mat_heat_anno<-data.frame(GO_type = mat_heat_anno[order_vec,])
+rownames(mat_heat_anno)<-rownames(rbind(annotation_list[["Enhanced in SEV"]],annotation_list[["Enhanced in MILD"]]))[order_vec]
+
+pheatmap(abs(mat_heat),
+         show_colnames = FALSE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+         annotation_col = NULL,annotation_row = mat_heat_anno,
+         # col = c(rev(colorRampPalette(c("white","#08306B"))(25))[-25],colorRampPalette(c("white","#800001"))(25)),
+         col = c(colorRampPalette(c("white","#18A2A7"))(50)),
+         breaks = unique(c(seq(from = 0, to = max(as.vector(abs(mat_heat))),length.out = 51))),
+         border_color = "white")
+
+
+
+
+##--------------------------------------------------------------------------------------------
+
+##7. Summary the enrichment score of each TF-specific regulaton for the above GO term and Visualization
+##--------------------------------------------------------------------------------------------
+annotation_merge<-rbind(annotation_list[["Enhanced in SEV"]],
+                        annotation_list[["Enhanced in MILD"]])
+# GO_term_important<-rownames(annotation_merge)
+GO_term_important<-c(rownames(annotation_list[["Enhanced in SEV"]]),rownames(annotation_list[["Enhanced in MILD"]]))
+sign_vec<-annotation_merge$GO_type
+##
+Geneset_GO<-list()
+for(GO_index in 1:nrow(annotation_merge)){
+  GO_ID<-NULL
+  GO_obj_use<-GO_res_all_list_ori$MILD[[sign_vec[GO_index]]]
+  index_choose<-which(GO_obj_use@result$Description == GO_term_important[GO_index])
+  if(length(index_choose)>0){
+    GO_ID<-GO_obj_use@result[index_choose,"ID"]
+  }else{
+    GO_obj_use<-GO_res_all_list_ori$SEV[[sign_vec[GO_index]]]
+    index_choose<-which(GO_obj_use@result$Description == GO_term_important[GO_index])
+    GO_ID<-GO_obj_use@result[index_choose,"ID"]
+  }
+  gene_ID_in<-GO_obj_use@geneSets[[which(names(GO_obj_use@geneSets) == GO_ID)]]
+  gene_SYMBOL_in = mapIds(x = org.Hs.eg.db,
+                          keys = gene_ID_in,
+                          keytype = "ENTREZID",
+                          column = "SYMBOL")
+  gene_SYMBOL_in<-as.character(gene_SYMBOL_in)
+  Geneset_GO[[GO_index]]<-gene_SYMBOL_in
+}
+names(Geneset_GO)<-GO_term_important
+##
+TF_GO_enrich_mat<-matrix(NA,nrow = 0,ncol = 6)
+count<-0
+for(GO_use in GO_term_important){
+  count<-count + 1
+  for(Type_use in c("MILD","SEV")){
+    GO_obj_use<-GO_res_list[[Type_use]][[sign_vec[count]]]
+    ##
+    for(TF_use in TF_constraint){
+      if( TF_use %in% names(GO_obj_use)){
+        index_choose<-which(GO_obj_use[[TF_use]]@result$Description == GO_use)
+        if(length(index_choose)>0){
+          GO_res_choose<-GO_obj_use[[TF_use]]@result[index_choose,]
+          aaa<-as.numeric(strsplit(GO_res_choose[,"GeneRatio"],"/")[[1]])
+          GeneRatio_res<-aaa[1]/aaa[2]
+          Count_res<-GO_res_choose[,"Count"]
+          p_adjust_res<-GO_res_choose[,"p.adjust"]
+          ##
+          TF_GO_enrich_mat<-rbind(TF_GO_enrich_mat,c(GO_use,
+                                                     Type_use,
+                                                     TF_use,
+                                                     GeneRatio_res,
+                                                     Count_res,
+                                                     p_adjust_res))
+        }else{
+          TF_GO_enrich_mat<-rbind(TF_GO_enrich_mat,c(GO_use,
+                                                     Type_use,
+                                                     TF_use,
+                                                     rep(NA,3)))
+        } 
+      }else{
+        TF_GO_enrich_mat<-rbind(TF_GO_enrich_mat,c(GO_use,
+                                                   Type_use,
+                                                   TF_use,
+                                                   rep(NA,3)))
+      }
+    }
+  }
+}
+
+TF_GO_enrich_mat<-as.data.frame(TF_GO_enrich_mat)
+names(TF_GO_enrich_mat)<-c("GO_term","patient","TF","GeneRatio","Count","p.adjust")
+TF_GO_enrich_mat$GeneRatio<-as.numeric(TF_GO_enrich_mat$GeneRatio)
+TF_GO_enrich_mat$Count<-as.numeric(TF_GO_enrich_mat$Count)
+TF_GO_enrich_mat$p.adjust<-as.numeric(TF_GO_enrich_mat$p.adjust)
+##
+TF_GO_enrich_mat[which(is.na(TF_GO_enrich_mat[,6])),4:5]<-0
+TF_GO_enrich_mat[which(is.na(TF_GO_enrich_mat[,6])),6]<-1
+
+plotdata<-matrix(NA,nrow = 0,ncol = 4)
+for(GO_search_index in 1:length(GO_term_important)){
+  plotdata<-rbind(plotdata,  TF_GO_enrich_mat[which((TF_GO_enrich_mat$GO_term == GO_term_important[GO_search_index])),c(1:3,5)])
+}
+plotdata<-as.data.frame(plotdata)
+names(plotdata)<-c("GO_term","patient","TF","Count")
+plotdata$patient<-factor(plotdata$patient,levels = c("MILD","SEV"))
+plotdata$GO_term<-factor(plotdata$GO_term,levels = rev(rownames(annotation_merge)))
+plotdata$TF<-factor(plotdata$TF,levels = TF_constraint)
+plotdata$Count<-as.numeric(plotdata$Count)
+##
+diff_mat<-matrix(NA,nrow = 0,ncol = length(TF_constraint))
+for(GO_use in GO_term_important){
+  res_vec<-c()
+  for(TF_use in TF_constraint){
+    value_vec<-plotdata[which(plotdata$GO_term == GO_use & plotdata$TF == TF_use),"Count"]
+    strength_diff<-value_vec[2] - value_vec[1]
+    ##
+    res_vec<-c(res_vec,strength_diff)
+  }
+  diff_mat<-rbind(diff_mat,res_vec)
+}
+rownames(diff_mat)<-GO_term_important
+colnames(diff_mat)<-TF_constraint
+
+
+diff_mat_tran<-diff_mat/apply(abs(diff_mat),MARGIN = 1,max)
+diff_mat_tran<-ifelse(is.nan(diff_mat_tran),0,diff_mat_tran)
+
+# ##Visualization by heatmap
+# # pheatmap(diff_mat_tran,show_colnames = TRUE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+# #          annotation_col = NULL,annotation_row = NULL,
+# #          # col = colorRampPalette(c("white","#4A66D9"))(51),
+# #          col = colorRampPalette(c("white",brewer.pal(9,"Greens")[1:6]))(51),
+# #          breaks = seq(from = min(as.vector(diff_mat_tran)), to = max(as.vector(diff_mat_tran)),length.out = 51))
+# 
+# ##reorder
+# pheatmap(diff_mat_tran[order_vec,],show_colnames = TRUE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+#          annotation_col = NULL,annotation_row = NULL,
+#          # col = colorRampPalette(c("white","#4A66D9"))(51),
+#          col = colorRampPalette(c("white","#4A66D9"))(51),
+#          breaks = seq(from = min(as.vector(diff_mat_tran)), to = max(as.vector(diff_mat_tran)),length.out = 51))
+
+
+##reorder
+pheatmap(diff_mat_tran[order_vec,],show_colnames = TRUE,show_rownames = TRUE,cluster_cols = FALSE,cluster_rows = FALSE,
+         annotation_col = NULL,annotation_row = NULL,
+         col = rev(c(rev(colorRampPalette(c("white","#DB3F3B"))(25))[-25],colorRampPalette(c("white","#4A66D9"))(25))),
+         breaks = c(rev(seq(from = 0, to = min(as.vector(diff_mat_tran)),length.out = 25))[-25],seq(from = 0, to = max(as.vector(diff_mat_tran)),length.out = 25)))
+
+##save some object
+gene_choose_list<-list()
+for(GO_term_use in GO_term_important){
+  Gene_candiate<-Geneset_GO[[GO_term_use]]
+  gene_GRN<-rownames(GRN_patienttype_specific[[1]][[1]]$strength)
+  
+  gene_choose<-intersect(gene_GRN,Gene_candiate)
+  gene_choose_list[[GO_term_use]]<-gene_choose
+}
+save(gene_choose_list,file = paste(File_path,"/Downstream analysis/Obj_use/gene_choose_list_",celltype_choose,".Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+

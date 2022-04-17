@@ -1,0 +1,7 @@
+
+setwd(("D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients/Train model/Output_obj/"))
+file_name<-dir()
+for(file_name_use in file_name){
+  load(file_name_use)
+  
+}

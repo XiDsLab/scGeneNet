@@ -1,0 +1,136 @@
+#gold standard network
+rm(list = ls())
+##1. Package loading
+##--------------------------------------------------------------------------------------------
+library(readr)
+##--------------------------------------------------------------------------------------------
+
+#2. Set up the overall file path
+##--------------------------------------------------------------------------------------------
+File_path<-"D:/Project/Pro_scGeneNet/paper/SUPPLEMENTARY MATERIAL/Real data analysis/Application to scRNA-seq data from COVID-19 patients"
+##--------------------------------------------------------------------------------------------
+
+#3. Load data
+##--------------------------------------------------------------------------------------------
+load(paste(File_path,"/Data/gene_GRN_1000.Rdata",sep = ""))
+load(paste(File_path,"/Data/TF_list_all.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
+
+
+##4. exact the goldard standard GRN as background support
+##--------------------------------------------------------------------------------------------
+##4.0 Preparion
+TF_choose<-gene_GRN[which(gene_GRN %in% TF_list_all[[1]])]
+setwd(paste(paste(strsplit(File_path,"/")[[1]][-(length(strsplit(File_path,"/")[[1]]))],collapse = "/"),
+            "/reference database",sep = ""))
+file_type <- "COVID19"
+gold_standard_network<-diag(length(gene_GRN))
+rownames(gold_standard_network)<-gene_GRN
+colnames(gold_standard_network)<-gene_GRN
+##
+pat_mat<-matrix(0,nrow = length(gene_GRN),ncol = length(gene_GRN))
+pat_mat[1:length(TF_choose),]<-1
+sel_index<-which(pat_mat[upper.tri(pat_mat)] == 1)
+
+##4.1 Database: ChEA
+data_ChEA<-read.table("./ChEA/gene_attribute_edges.txt",header = TRUE)
+data_ChEA<-data_ChEA[-1,]
+data_ChEA_choose<-data_ChEA[which(data_ChEA$source %in% TF_choose),c(1,4)]
+rm(data_ChEA)
+for(tf_index in 1:length(TF_choose)){
+  target_ori<-data_ChEA_choose[data_ChEA_choose$source == TF_choose[tf_index],2]
+  index_in<-which(gene_GRN %in% target_ori)
+  gold_standard_network[tf_index,index_in]<-1
+}
+gold_standard_network<-gold_standard_network + t(gold_standard_network)
+gold_standard_network<-ifelse(gold_standard_network>0,1,0)
+(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+prop.table(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+
+##4.2 Database: htftarget
+file_names<-dir(paste("./htftarget/",file_type,sep = ""))
+TF_use_htftarget<-as.vector(Reduce("rbind",strsplit(file_names,".t"))[,1])
+for(tf_index in 1:length(TF_use_htftarget)){
+  data_htftarget<-read.table(paste("./htftarget/",file_type,"/",file_names[tf_index],sep = ""),quote = "",fill = TRUE,header = TRUE,row.names = NULL) 
+  target_ori<-as.vector(as.matrix(data_htftarget[,3]))
+  index_in<-which(gene_GRN %in% target_ori)
+  gold_standard_network[which(TF_choose == TF_use_htftarget[tf_index]),index_in]<-1
+}
+gold_standard_network<-gold_standard_network + t(gold_standard_network)
+gold_standard_network<-ifelse(gold_standard_network>0,1,0)
+(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+prop.table(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+
+##4.3 Database: RegNetwork
+data_RegNetwork<-read.csv(paste("./RegNetwork/",file_type,"/RegNetwork_ref.csv",sep = ""),header = TRUE)
+data_RegNetwork_choose<-data_RegNetwork[which(data_RegNetwork$regulator_symbol %in% TF_choose),c(1,3)]
+rm(data_RegNetwork)
+for(tf_index in 1:length(TF_choose)){
+  target_ori<-data_RegNetwork_choose[data_RegNetwork_choose$regulator_symbol == TF_choose[tf_index],2]
+  index_in<-which(gene_GRN %in% target_ori)
+  gold_standard_network[tf_index,index_in]<-1
+}
+gold_standard_network<-gold_standard_network + t(gold_standard_network)
+gold_standard_network<-ifelse(gold_standard_network>0,1,0)
+(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+prop.table(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+
+##4.4 Database: TRRUST
+data_TRRUST<-read_tsv("./TRRUST/trrust_rawdata.human.tsv",col_names = FALSE)
+colnames(data_TRRUST)<-c("TF","TARGET","Type","score")
+data_TRRUST_choose<-data_TRRUST[which(data_TRRUST$TF %in% TF_choose),c(1,2)]
+data_TRRUST_choose<-as.data.frame(data_TRRUST_choose)
+rm(data_TRRUST)
+for(tf_index in 1:length(TF_choose)){
+  target_ori<-data_TRRUST_choose[data_TRRUST_choose$TF == TF_choose[tf_index],2]
+  index_in<-which(gene_GRN %in% target_ori)
+  gold_standard_network[tf_index,index_in]<-1
+}
+gold_standard_network<-gold_standard_network + t(gold_standard_network)
+gold_standard_network<-ifelse(gold_standard_network>0,1,0)
+(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+prop.table(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+
+
+##4.5 Database: STRING
+protein_info<-read.table("./STRING/9606.protein.info.v11.5.txt",header = TRUE, sep = "\t")
+protein_info<-protein_info[,c(1,2)]
+protein_link<-read.table("./STRING/9606.protein.links.v11.5.txt.gz.inproc",header = TRUE,sep = " ")
+score_threshold<-850
+protein_link_sel<-protein_link[which(protein_link$combined_score>=score_threshold),]
+dim(protein_link_sel)
+##
+for(tf_index in 1:length(TF_choose)){
+  
+  ENSP_num<-protein_info$string_protein_id[which(protein_info$preferred_name == TF_choose[tf_index])]
+  index_1<-which(protein_link_sel$protein1 == ENSP_num)
+  index_2<-which(protein_link_sel$protein2 == ENSP_num)
+  target_ori<-c()
+  if(length(index_1)>0){
+    target_ori<-c(target_ori,protein_link_sel$protein2[index_1])
+  }
+  if(length(index_2)>0){
+    target_ori<-c(target_ori,protein_link_sel$protein1[index_2])
+  }
+  target_ori_ENSP_num<-unique(target_ori)
+  #tran
+  if(length(target_ori_ENSP_num)>0){
+    target_ori<-protein_info$preferred_name[which(protein_info$string_protein_id %in% target_ori_ENSP_num)]
+  }else{
+    target_ori<-c()
+  }
+  index_in<-which(gene_GRN %in% target_ori)
+  if(length(index_in)>0){
+    gold_standard_network[tf_index,index_in]<-1 
+  }
+}
+gold_standard_network<-gold_standard_network + t(gold_standard_network)
+gold_standard_network<-ifelse(gold_standard_network>0,1,0)
+(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+prop.table(table(gold_standard_network[upper.tri(gold_standard_network)][sel_index]))
+##--------------------------------------------------------------------------------------------
+
+##5. Save
+##--------------------------------------------------------------------------------------------
+save(gold_standard_network,file = paste(File_path,"/Data/gold_standard_network_1000.Rdata",sep = ""))
+##--------------------------------------------------------------------------------------------
