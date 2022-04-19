@@ -80,6 +80,8 @@ scGeneNet_list_alongpath[[l]]<-scGeneNet_main(scGeneNet_list = scGeneNet_list,la
 names(scGeneNet_list_alongpath)<-paste("lambda: ",lambda_path,sep = "")
 ##-------------------------------------------------------------
 ```
+## Reproductivity
+All data used and corresponding source codes for simulation and real data analysis in paper "Single-cell gene regulatory network analysis for mixed cell populations" can be accessed at https://drive.google.com/drive/folders/1lmrtmGWcjq0JZIWjXO2iCi7qylRowuSf?usp=sharing.
 
 ## Reference
 
